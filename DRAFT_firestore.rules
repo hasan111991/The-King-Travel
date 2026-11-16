@@ -1,0 +1,560 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase 3: Global Hardened Primitives
+    // -------------------------------------------------------------------------
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'hasanaamir815@gmail.com';
+    }
+
+    function isSuperAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerifiedUser() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin'
+      );
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerifiedUser() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isNonEmptyStr(val, maxLen) {
+      return val is string && val.size() >= 1 && val.size() <= maxLen;
+    }
+
+    function isOptionalStr(val, maxLen) {
+      return val is string && val.size() <= maxLen;
+    }
+
+    // -------------------------------------------------------------------------
+    // Validation Blueprints (Phase 2 & 4)
+    // -------------------------------------------------------------------------
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'name', 'email', 'phone', 'whatsapp', 'nationality', 'role', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && isNonEmptyStr(data.name, 120)
+        && isNonEmptyStr(data.email, 200)
+        && (!('phone' in data) || isOptionalStr(data.phone, 40))
+        && (!('whatsapp' in data) || isOptionalStr(data.whatsapp, 40))
+        && (!('nationality' in data) || isOptionalStr(data.nationality, 80))
+        && data.role in ['customer', 'admin', 'super_admin']
+        && data.status in ['active', 'blocked']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRole(data) {
+      return data.keys().hasAll(['uid', 'email', 'name', 'role', 'assignedBy', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'name', 'role', 'assignedBy', 'createdAt'])
+        && isValidId(data.uid)
+        && isNonEmptyStr(data.email, 200)
+        && isNonEmptyStr(data.name, 120)
+        && data.role in ['admin', 'super_admin']
+        && isNonEmptyStr(data.assignedBy, 128)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidBooking(data) {
+      return data.keys().hasAll([
+        'bookingId', 'bookingReference', 'userId', 'mode', 'flightDetails',
+        'passengers', 'contactDetails', 'totalAmount', 'currency',
+        'paymentMethod', 'paymentStatus', 'bookingStatus', 'createdAt', 'updatedAt'
+      ])
+        && data.keys().hasOnly([
+          'bookingId', 'bookingReference', 'userId', 'mode', 'flightDetails',
+          'passengers', 'contactDetails', 'fareBreakdown', 'totalAmount', 'currency',
+          'paymentMethod', 'paymentStatus', 'bookingStatus', 'supplierProvider',
+          'supplierReference', 'ticketFileUrl', 'ticketFileName', 'internalNotes',
+          'refundReason', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.bookingId)
+        && isNonEmptyStr(data.bookingReference, 40)
+        && isValidId(data.userId)
+        && data.mode in ['demo', 'live']
+        && data.flightDetails is map
+        && data.passengers is list && data.passengers.size() >= 1 && data.passengers.size() <= 9
+        && data.passengers[0] is map
+        && data.contactDetails is map
+        && (!('fareBreakdown' in data) || data.fareBreakdown is map)
+        && data.totalAmount is number && data.totalAmount >= 0
+        && isNonEmptyStr(data.currency, 10)
+        && isNonEmptyStr(data.paymentMethod, 60)
+        && data.paymentStatus in ['unpaid', 'pending_verification', 'confirmed', 'rejected', 'refund_pending', 'refunded']
+        && data.bookingStatus in [
+          'New Request', 'Pending Payment', 'Payment Verification',
+          'Payment Confirmed', 'Supplier Confirmation Pending',
+          'Ticket Issued', 'Cancelled', 'Refund Requested', 'Refunded'
+        ]
+        && (!('supplierProvider' in data) || isOptionalStr(data.supplierProvider, 60))
+        && (!('supplierReference' in data) || isOptionalStr(data.supplierReference, 80))
+        && (!('ticketFileUrl' in data) || isOptionalStr(data.ticketFileUrl, 600000))
+        && (!('ticketFileName' in data) || isOptionalStr(data.ticketFileName, 180))
+        && (!('internalNotes' in data) || isOptionalStr(data.internalNotes, 2000))
+        && (!('refundReason' in data) || isOptionalStr(data.refundReason, 500))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll([
+        'paymentId', 'bookingId', 'userId', 'amount', 'currency',
+        'paymentMethod', 'verificationStatus', 'createdAt', 'updatedAt'
+      ])
+        && data.keys().hasOnly([
+          'paymentId', 'bookingId', 'userId', 'amount', 'currency',
+          'paymentMethod', 'receiptUrl', 'receiptFileName', 'transactionReference',
+          'verificationStatus', 'adminRemarks', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.paymentId)
+        && isValidId(data.bookingId)
+        && isValidId(data.userId)
+        && data.amount is number && data.amount >= 0
+        && isNonEmptyStr(data.currency, 10)
+        && isNonEmptyStr(data.paymentMethod, 60)
+        && (!('receiptUrl' in data) || isOptionalStr(data.receiptUrl, 600000))
+        && (!('receiptFileName' in data) || isOptionalStr(data.receiptFileName, 180))
+        && (!('transactionReference' in data) || isOptionalStr(data.transactionReference, 120))
+        && data.verificationStatus in ['pending', 'verified', 'rejected', 'refunded']
+        && (!('adminRemarks' in data) || isOptionalStr(data.adminRemarks, 500))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFlightOffer(data) {
+      return data.keys().hasAll([
+        'offerId', 'airline', 'origin', 'destination', 'departureDate',
+        'price', 'currency', 'baggage', 'validity', 'status', 'createdAt', 'updatedAt'
+      ])
+        && data.keys().hasOnly([
+          'offerId', 'airline', 'airlineCode', 'flightNumber', 'origin', 'originCode',
+          'destination', 'destinationCode', 'departureDate', 'returnDate', 'cabinClass',
+          'price', 'currency', 'baggage', 'validity', 'notes', 'status', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.offerId)
+        && isNonEmptyStr(data.airline, 120)
+        && (!('airlineCode' in data) || isOptionalStr(data.airlineCode, 10))
+        && (!('flightNumber' in data) || isOptionalStr(data.flightNumber, 20))
+        && isNonEmptyStr(data.origin, 120)
+        && (!('originCode' in data) || isOptionalStr(data.originCode, 10))
+        && isNonEmptyStr(data.destination, 120)
+        && (!('destinationCode' in data) || isOptionalStr(data.destinationCode, 10))
+        && isNonEmptyStr(data.departureDate, 30)
+        && (!('returnDate' in data) || isOptionalStr(data.returnDate, 30))
+        && (!('cabinClass' in data) || isOptionalStr(data.cabinClass, 40))
+        && data.price is number && data.price >= 0
+        && isNonEmptyStr(data.currency, 10)
+        && isNonEmptyStr(data.baggage, 80)
+        && isNonEmptyStr(data.validity, 40)
+        && (!('notes' in data) || isOptionalStr(data.notes, 500))
+        && data.status in ['active', 'expired', 'draft']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDestination(data) {
+      return data.keys().hasAll(['destinationId', 'name', 'country', 'airportCode', 'description', 'featured', 'updatedAt'])
+        && data.keys().hasOnly(['destinationId', 'name', 'country', 'airportCode', 'city', 'description', 'imageUrl', 'startingFare', 'currency', 'featured', 'order', 'updatedAt'])
+        && isValidId(data.destinationId)
+        && isNonEmptyStr(data.name, 100)
+        && isNonEmptyStr(data.country, 100)
+        && isNonEmptyStr(data.airportCode, 10)
+        && (!('city' in data) || isOptionalStr(data.city, 100))
+        && isNonEmptyStr(data.description, 500)
+        && (!('imageUrl' in data) || isOptionalStr(data.imageUrl, 500))
+        && (!('startingFare' in data) || data.startingFare is number)
+        && (!('currency' in data) || isOptionalStr(data.currency, 10))
+        && data.featured is bool
+        && (!('order' in data) || data.order is number)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSpecialOffer(data) {
+      return data.keys().hasAll(['offerId', 'title', 'description', 'destination', 'discountLabel', 'validUntil', 'status', 'updatedAt'])
+        && data.keys().hasOnly(['offerId', 'title', 'subtitle', 'description', 'destination', 'discountLabel', 'promoCode', 'validUntil', 'status', 'updatedAt'])
+        && isValidId(data.offerId)
+        && isNonEmptyStr(data.title, 140)
+        && (!('subtitle' in data) || isOptionalStr(data.subtitle, 140))
+        && isNonEmptyStr(data.description, 600)
+        && isNonEmptyStr(data.destination, 100)
+        && isNonEmptyStr(data.discountLabel, 60)
+        && (!('promoCode' in data) || isOptionalStr(data.promoCode, 40))
+        && isNonEmptyStr(data.validUntil, 40)
+        && data.status in ['active', 'inactive']
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTestimonial(data) {
+      return data.keys().hasAll(['testimonialId', 'customerName', 'route', 'rating', 'quote', 'status', 'updatedAt'])
+        && data.keys().hasOnly(['testimonialId', 'customerName', 'city', 'route', 'rating', 'quote', 'status', 'updatedAt'])
+        && isValidId(data.testimonialId)
+        && isNonEmptyStr(data.customerName, 100)
+        && (!('city' in data) || isOptionalStr(data.city, 80))
+        && isNonEmptyStr(data.route, 100)
+        && data.rating is number && data.rating >= 1 && data.rating <= 5
+        && isNonEmptyStr(data.quote, 600)
+        && data.status in ['published', 'hidden']
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidInquiry(data) {
+      return data.keys().hasAll(['inquiryId', 'name', 'email', 'phone', 'subject', 'message', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['inquiryId', 'userId', 'bookingId', 'name', 'email', 'phone', 'subject', 'message', 'status', 'adminReply', 'createdAt', 'updatedAt'])
+        && isValidId(data.inquiryId)
+        && (!('userId' in data) || data.userId == null || isValidId(data.userId))
+        && (!('bookingId' in data) || data.bookingId == null || isOptionalStr(data.bookingId, 128))
+        && isNonEmptyStr(data.name, 120)
+        && isNonEmptyStr(data.email, 200)
+        && isNonEmptyStr(data.phone, 40)
+        && isNonEmptyStr(data.subject, 200)
+        && isNonEmptyStr(data.message, 2000)
+        && data.status in ['new', 'in_progress', 'resolved']
+        && (!('adminReply' in data) || isOptionalStr(data.adminReply, 2000))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNewsletter(data) {
+      return data.keys().hasAll(['email', 'createdAt'])
+        && data.keys().hasOnly(['email', 'createdAt'])
+        && isNonEmptyStr(data.email, 200)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['notificationId', 'userId', 'type', 'title', 'message', 'read', 'createdAt'])
+        && data.keys().hasOnly(['notificationId', 'userId', 'bookingId', 'type', 'title', 'message', 'read', 'createdAt'])
+        && isValidId(data.notificationId)
+        && isValidId(data.userId)
+        && (!('bookingId' in data) || isOptionalStr(data.bookingId, 128))
+        && isNonEmptyStr(data.type, 80)
+        && isNonEmptyStr(data.title, 160)
+        && isNonEmptyStr(data.message, 600)
+        && data.read is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['agencyName', 'operatingMode', 'defaultCurrency', 'updatedAt'])
+        && data.keys().hasOnly([
+          'agencyName', 'tagline', 'operatingMode', 'defaultCurrency',
+          'whatsappNumber', 'contactEmail', 'contactPhone', 'officeAddress',
+          'socialLinks', 'paymentMethods', 'bankDetails', 'faqs',
+          'legalPages', 'heroTitle', 'heroSubtitle', 'updatedAt'
+        ])
+        && isNonEmptyStr(data.agencyName, 120)
+        && (!('tagline' in data) || isOptionalStr(data.tagline, 160))
+        && data.operatingMode in ['demo', 'live']
+        && isNonEmptyStr(data.defaultCurrency, 10)
+        && (!('whatsappNumber' in data) || isOptionalStr(data.whatsappNumber, 40))
+        && (!('contactEmail' in data) || isOptionalStr(data.contactEmail, 200))
+        && (!('contactPhone' in data) || isOptionalStr(data.contactPhone, 40))
+        && (!('officeAddress' in data) || isOptionalStr(data.officeAddress, 300))
+        && (!('socialLinks' in data) || data.socialLinks is map)
+        && (!('paymentMethods' in data) || data.paymentMethods is map)
+        && (!('bankDetails' in data) || data.bankDetails is map)
+        && (!('faqs' in data) || (data.faqs is list && data.faqs.size() <= 30))
+        && (!('legalPages' in data) || data.legalPages is map)
+        && (!('heroTitle' in data) || isOptionalStr(data.heroTitle, 200))
+        && (!('heroSubtitle' in data) || isOptionalStr(data.heroSubtitle, 400))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['logId', 'actorUid', 'actorEmail', 'action', 'targetCollection', 'targetId', 'details', 'createdAt'])
+        && data.keys().hasOnly(['logId', 'actorUid', 'actorEmail', 'action', 'targetCollection', 'targetId', 'details', 'createdAt'])
+        && isValidId(data.logId)
+        && isValidId(data.actorUid)
+        && isNonEmptyStr(data.actorEmail, 200)
+        && isNonEmptyStr(data.action, 160)
+        && isNonEmptyStr(data.targetCollection, 80)
+        && isNonEmptyStr(data.targetId, 128)
+        && isNonEmptyStr(data.details, 1000)
+        && data.createdAt is timestamp;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Match Blocks
+    // -------------------------------------------------------------------------
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isValidId(userId)
+        && isVerifiedUser()
+        && isValidUser(incoming())
+        && incoming().uid == userId
+        && request.auth.uid == userId
+        && incoming().role == 'customer'
+        && incoming().status == 'active'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isVerifiedUser()
+        && isValidUser(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isSuperAdmin() ||
+          (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) && incoming().role == existing().role) ||
+          (isOwner(userId) && existing().status == 'active' && incoming().role == existing().role && incoming().status == existing().status && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'whatsapp', 'nationality', 'updatedAt']))
+        );
+      allow delete: if false;
+    }
+
+    match /admins/{uid} {
+      allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isValidId(uid)
+        && isSuperAdmin()
+        && isValidAdminRole(incoming())
+        && incoming().uid == uid
+        && incoming().createdAt == request.time;
+      allow update: if isValidId(uid)
+        && isSuperAdmin()
+        && isValidAdminRole(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'role', 'assignedBy']);
+      allow delete: if isValidId(uid) && isSuperAdmin() && uid != request.auth.uid;
+    }
+
+    match /bookings/{bookingId} {
+      allow get: if isValidId(bookingId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isValidId(bookingId)
+        && isVerifiedUser()
+        && isValidBooking(incoming())
+        && incoming().bookingId == bookingId
+        && incoming().userId == request.auth.uid
+        && incoming().paymentStatus == 'unpaid'
+        && incoming().bookingStatus in ['New Request', 'Pending Payment']
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(bookingId)
+        && isVerifiedUser()
+        && isValidBooking(incoming())
+        && incoming().bookingId == existing().bookingId
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            existing().userId == request.auth.uid
+            && !(existing().bookingStatus in ['Ticket Issued', 'Cancelled', 'Refunded'])
+            && (
+              (incoming().diff(existing()).affectedKeys().hasOnly(['paymentMethod', 'paymentStatus', 'bookingStatus', 'updatedAt'])
+                && incoming().paymentStatus == 'pending_verification'
+                && incoming().bookingStatus == 'Payment Verification') ||
+              (incoming().diff(existing()).affectedKeys().hasOnly(['bookingStatus', 'refundReason', 'updatedAt'])
+                && incoming().bookingStatus in ['Cancelled', 'Refund Requested'])
+            )
+          )
+        );
+      allow delete: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow get: if isValidId(paymentId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isValidId(paymentId)
+        && isVerifiedUser()
+        && isValidPayment(incoming())
+        && incoming().paymentId == paymentId
+        && incoming().userId == request.auth.uid
+        && incoming().verificationStatus == 'pending'
+        && exists(/databases/$(database)/documents/bookings/$(incoming().bookingId))
+        && get(/databases/$(database)/documents/bookings/$(incoming().bookingId)).data.userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(paymentId)
+        && isAdmin()
+        && isValidPayment(incoming())
+        && incoming().paymentId == existing().paymentId
+        && incoming().bookingId == existing().bookingId
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['verificationStatus', 'adminRemarks', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /flightOffers/{offerId} {
+      allow get: if isValidId(offerId);
+      allow list: if true;
+      allow create: if isValidId(offerId)
+        && isAdmin()
+        && isValidFlightOffer(incoming())
+        && incoming().offerId == offerId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(offerId)
+        && isAdmin()
+        && isValidFlightOffer(incoming())
+        && incoming().offerId == existing().offerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(offerId) && isAdmin();
+    }
+
+    match /destinations/{destinationId} {
+      allow get: if isValidId(destinationId);
+      allow list: if true;
+      allow create: if isValidId(destinationId)
+        && isAdmin()
+        && isValidDestination(incoming())
+        && incoming().destinationId == destinationId
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(destinationId)
+        && isAdmin()
+        && isValidDestination(incoming())
+        && incoming().destinationId == existing().destinationId
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(destinationId) && isAdmin();
+    }
+
+    match /offers/{offerId} {
+      allow get: if isValidId(offerId);
+      allow list: if true;
+      allow create: if isValidId(offerId)
+        && isAdmin()
+        && isValidSpecialOffer(incoming())
+        && incoming().offerId == offerId
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(offerId)
+        && isAdmin()
+        && isValidSpecialOffer(incoming())
+        && incoming().offerId == existing().offerId
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(offerId) && isAdmin();
+    }
+
+    match /testimonials/{testimonialId} {
+      allow get: if isValidId(testimonialId) && (existing().status == 'published' || isAdmin());
+      allow list: if resource.data.status == 'published' || isBootstrappedAdmin();
+      allow create: if isValidId(testimonialId)
+        && isAdmin()
+        && isValidTestimonial(incoming())
+        && incoming().testimonialId == testimonialId
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(testimonialId)
+        && isAdmin()
+        && isValidTestimonial(incoming())
+        && incoming().testimonialId == existing().testimonialId
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(testimonialId) && isAdmin();
+    }
+
+    match /inquiries/{inquiryId} {
+      allow get: if isValidId(inquiryId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isValidId(inquiryId)
+        && isValidInquiry(incoming())
+        && incoming().inquiryId == inquiryId
+        && incoming().status == 'new'
+        && (!('userId' in incoming()) || incoming().userId == null || (isSignedIn() && incoming().userId == request.auth.uid))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(inquiryId)
+        && isAdmin()
+        && isValidInquiry(incoming())
+        && incoming().inquiryId == existing().inquiryId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'adminReply', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /newsletter/{subscriberId} {
+      allow get: if isValidId(subscriberId) && isAdmin();
+      allow list: if isBootstrappedAdmin();
+      allow create: if isValidId(subscriberId)
+        && isValidNewsletter(incoming())
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isValidId(notificationId)
+        && isVerifiedUser()
+        && isValidNotification(incoming())
+        && incoming().notificationId == notificationId
+        && (incoming().userId == request.auth.uid || isAdmin())
+        && incoming().createdAt == request.time;
+      allow update: if isValidId(notificationId)
+        && isVerifiedUser()
+        && isValidNotification(incoming())
+        && incoming().notificationId == existing().notificationId
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().userId == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if false;
+    }
+
+    match /settings/{settingId} {
+      allow get: if isValidId(settingId) && (settingId == 'public' || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isValidId(settingId)
+        && isAdmin()
+        && isValidSettings(incoming())
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(settingId)
+        && isAdmin()
+        && isValidSettings(incoming())
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow get: if isValidId(logId) && isAdmin();
+      allow list: if isBootstrappedAdmin();
+      allow create: if isValidId(logId)
+        && isAdmin()
+        && isValidAuditLog(incoming())
+        && incoming().logId == logId
+        && incoming().actorUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+  }
+}

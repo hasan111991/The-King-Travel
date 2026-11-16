@@ -1,0 +1,422 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered customer or administrator account profile.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "whatsapp": { "type": "string", "maxLength": 40 },
+        "nationality": { "type": "string", "maxLength": 80 },
+        "role": { "type": "string", "enum": ["customer", "admin", "super_admin"] },
+        "status": { "type": "string", "enum": ["active", "blocked"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role", "status", "createdAt", "updatedAt"]
+    },
+    "SavedPassenger": {
+      "title": "SavedPassenger",
+      "description": "Customer-saved passenger profile for faster repeat flight bookings.",
+      "type": "object",
+      "properties": {
+        "passengerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "firstName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "lastName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "dateOfBirth": { "type": "string", "maxLength": 20 },
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "nationality": { "type": "string", "maxLength": 80 },
+        "passportNumber": { "type": "string", "maxLength": 40 },
+        "passportExpiry": { "type": "string", "maxLength": 20 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["passengerId", "userId", "firstName", "lastName", "dateOfBirth", "gender", "nationality", "createdAt", "updatedAt"]
+    },
+    "AdminRole": {
+      "title": "AdminRole",
+      "description": "Server-verified administrator registry entry.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["admin", "super_admin"] },
+        "assignedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "role", "assignedBy", "createdAt"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Customer flight booking request or confirmed booking record.",
+      "type": "object",
+      "properties": {
+        "bookingId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "bookingReference": { "type": "string", "minLength": 4, "maxLength": 40 },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "mode": { "type": "string", "enum": ["demo", "live"] },
+        "flightDetails": { "type": "object" },
+        "passengers": { "type": "array" },
+        "contactDetails": { "type": "object" },
+        "totalAmount": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "paymentMethod": { "type": "string", "maxLength": 60 },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "pending_verification", "confirmed", "rejected", "refund_pending", "refunded"] },
+        "bookingStatus": { "type": "string", "enum": ["New Request", "Pending Payment", "Payment Verification", "Payment Confirmed", "Supplier Confirmation Pending", "Ticket Issued", "Cancelled", "Refund Requested", "Refunded"] },
+        "supplierProvider": { "type": "string", "maxLength": 60 },
+        "supplierReference": { "type": "string", "maxLength": 80 },
+        "ticketFileUrl": { "type": "string", "maxLength": 600000 },
+        "ticketFileName": { "type": "string", "maxLength": 180 },
+        "internalNotes": { "type": "string", "maxLength": 2000 },
+        "refundReason": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["bookingId", "bookingReference", "userId", "mode", "flightDetails", "passengers", "contactDetails", "totalAmount", "currency", "paymentMethod", "paymentStatus", "bookingStatus", "createdAt", "updatedAt"]
+    },
+    "FlightRequest": {
+      "title": "FlightRequest",
+      "description": "Customer-driven manual flight booking request with multi-quotation workflow, payment verification, and airline e-ticket delivery.",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "requestReference": { "type": "string", "minLength": 4, "maxLength": 40 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "tripType": { "type": "string", "enum": ["one-way", "round-trip", "multi-city"] },
+        "departureCity": { "type": "string", "maxLength": 160 },
+        "destinationCity": { "type": "string", "maxLength": 160 },
+        "departureDate": { "type": "string", "maxLength": 30 },
+        "returnDate": { "type": "string", "maxLength": 30 },
+        "segments": { "type": "array" },
+        "preferredAirline": { "type": "string", "maxLength": 120 },
+        "passengersCount": { "type": "object" },
+        "cabinClass": { "type": "string", "enum": ["Economy", "Premium Economy", "Business", "First Class"] },
+        "passengerName": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "phoneWhatsapp": { "type": "string", "maxLength": 40 },
+        "additionalRequirements": { "type": "string", "maxLength": 2000 },
+        "status": {
+          "type": "string",
+          "enum": [
+            "New Request",
+            "Under Review",
+            "Quotation Sent",
+            "Awaiting Customer Approval",
+            "Awaiting Payment",
+            "Payment Verified",
+            "Booking Confirmed",
+            "Ticket Issued",
+            "Cancelled"
+          ]
+        },
+        "quotations": { "type": "array" },
+        "selectedQuotationId": { "type": "string", "maxLength": 128 },
+        "selectedQuotation": { "type": "object" },
+        "paymentMethod": { "type": "string", "maxLength": 60 },
+        "paymentStatus": { "type": "string", "enum": ["unpaid", "pending_verification", "verified", "rejected"] },
+        "transactionReference": { "type": "string", "maxLength": 120 },
+        "paymentReceiptUrl": { "type": "string", "maxLength": 600000 },
+        "paymentReceiptFileName": { "type": "string", "maxLength": 180 },
+        "supplierProvider": { "type": "string", "maxLength": 80 },
+        "supplierReference": { "type": "string", "maxLength": 80 },
+        "ticketFileUrl": { "type": "string", "maxLength": 600000 },
+        "ticketFileName": { "type": "string", "maxLength": 180 },
+        "adminNotes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "requestId",
+        "requestReference",
+        "tripType",
+        "departureCity",
+        "destinationCity",
+        "departureDate",
+        "preferredAirline",
+        "passengersCount",
+        "cabinClass",
+        "passengerName",
+        "email",
+        "phoneWhatsapp",
+        "status",
+        "quotations",
+        "paymentStatus",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment record and manual receipt verification metadata.",
+      "type": "object",
+      "properties": {
+        "paymentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "bookingId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "paymentMethod": { "type": "string", "maxLength": 60 },
+        "receiptUrl": { "type": "string", "maxLength": 600000 },
+        "receiptFileName": { "type": "string", "maxLength": 180 },
+        "transactionReference": { "type": "string", "maxLength": 120 },
+        "verificationStatus": { "type": "string", "enum": ["pending", "verified", "rejected", "refunded"] },
+        "adminRemarks": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["paymentId", "bookingId", "userId", "amount", "currency", "paymentMethod", "verificationStatus", "createdAt", "updatedAt"]
+    },
+    "FlightOffer": {
+      "title": "FlightOffer",
+      "description": "Admin-managed manual flight quotation offer.",
+      "type": "object",
+      "properties": {
+        "offerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "airline": { "type": "string", "maxLength": 120 },
+        "airlineCode": { "type": "string", "maxLength": 10 },
+        "flightNumber": { "type": "string", "maxLength": 20 },
+        "origin": { "type": "string", "maxLength": 120 },
+        "originCode": { "type": "string", "maxLength": 10 },
+        "destination": { "type": "string", "maxLength": 120 },
+        "destinationCode": { "type": "string", "maxLength": 10 },
+        "departureDate": { "type": "string", "maxLength": 30 },
+        "cabinClass": { "type": "string", "maxLength": 40 },
+        "price": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "baggage": { "type": "string", "maxLength": 80 },
+        "validity": { "type": "string", "maxLength": 40 },
+        "status": { "type": "string", "enum": ["active", "expired", "draft"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["offerId", "airline", "origin", "destination", "departureDate", "price", "currency", "baggage", "validity", "status", "createdAt", "updatedAt"]
+    },
+    "Destination": {
+      "title": "Destination",
+      "description": "Travel destination curated by agency admin.",
+      "type": "object",
+      "properties": {
+        "destinationId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "slug": { "type": "string", "maxLength": 100 },
+        "name": { "type": "string", "maxLength": 100 },
+        "country": { "type": "string", "maxLength": 100 },
+        "airportCode": { "type": "string", "maxLength": 10 },
+        "region": { "type": "string", "enum": ["international", "domestic", "usa_featured"] },
+        "description": { "type": "string", "maxLength": 500 },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "startingFare": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "featured": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["destinationId", "name", "country", "airportCode", "description", "featured", "updatedAt"]
+    },
+    "TravelPackage": {
+      "title": "TravelPackage",
+      "description": "Tour, Holiday, Honeymoon, or Hajj & Umrah package managed in CMS.",
+      "type": "object",
+      "properties": {
+        "packageId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "maxLength": 140 },
+        "category": { "type": "string", "enum": ["tour", "honeymoon", "hajj_umrah", "holiday"] },
+        "destination": { "type": "string", "maxLength": 120 },
+        "destinationSlug": { "type": "string", "maxLength": 100 },
+        "duration": { "type": "string", "maxLength": 60 },
+        "price": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "description": { "type": "string", "maxLength": 800 },
+        "includedServices": { "type": "array" },
+        "imageUrl": { "type": "string", "maxLength": 500 },
+        "featured": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["packageId", "title", "category", "destination", "duration", "description", "status", "updatedAt"]
+    },
+    "SpecialOffer": {
+      "title": "SpecialOffer",
+      "description": "Promotional travel campaign or seasonal deal.",
+      "type": "object",
+      "properties": {
+        "offerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "maxLength": 140 },
+        "description": { "type": "string", "maxLength": 600 },
+        "destination": { "type": "string", "maxLength": 100 },
+        "discountLabel": { "type": "string", "maxLength": 60 },
+        "validUntil": { "type": "string", "maxLength": 40 },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["offerId", "title", "description", "destination", "discountLabel", "validUntil", "status", "updatedAt"]
+    },
+    "Testimonial": {
+      "title": "Testimonial",
+      "description": "Customer testimonial displayed on the public site.",
+      "type": "object",
+      "properties": {
+        "testimonialId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "route": { "type": "string", "maxLength": 100 },
+        "rating": { "type": "number" },
+        "quote": { "type": "string", "maxLength": 600 },
+        "status": { "type": "string", "enum": ["published", "hidden"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["testimonialId", "customerName", "route", "rating", "quote", "status", "updatedAt"]
+    },
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "Customer contact, hotel, package, or booking support inquiry.",
+      "type": "object",
+      "properties": {
+        "inquiryId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128 },
+        "bookingId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "subject": { "type": "string", "maxLength": 200 },
+        "message": { "type": "string", "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["new", "in_progress", "resolved"] },
+        "adminReply": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["inquiryId", "name", "email", "phone", "subject", "message", "status", "createdAt", "updatedAt"]
+    },
+    "NewsletterSubscriber": {
+      "title": "NewsletterSubscriber",
+      "description": "Email newsletter subscription entry.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User-scoped booking and payment notification.",
+      "type": "object",
+      "properties": {
+        "notificationId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "bookingId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "maxLength": 80 },
+        "title": { "type": "string", "maxLength": 160 },
+        "message": { "type": "string", "maxLength": 600 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["notificationId", "userId", "type", "title", "message", "read", "createdAt"]
+    },
+    "WebsiteSettings": {
+      "title": "WebsiteSettings",
+      "description": "Configurable agency contact, payment instructions, legal text, and mode settings.",
+      "type": "object",
+      "properties": {
+        "agencyName": { "type": "string", "maxLength": 120 },
+        "tagline": { "type": "string", "maxLength": 160 },
+        "operatingMode": { "type": "string", "enum": ["demo", "live"] },
+        "defaultCurrency": { "type": "string", "maxLength": 10 },
+        "whatsappNumber": { "type": "string", "maxLength": 40 },
+        "contactEmail": { "type": "string", "maxLength": 200 },
+        "contactPhone": { "type": "string", "maxLength": 40 },
+        "officeAddress": { "type": "string", "maxLength": 300 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["agencyName", "operatingMode", "defaultCurrency", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable audit trail of administrative actions.",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 200 },
+        "action": { "type": "string", "maxLength": 160 },
+        "targetCollection": { "type": "string", "maxLength": 80 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["logId", "actorUid", "actorEmail", "action", "targetCollection", "targetId", "details", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles isolated by owner UID and admin access."
+    },
+    "/passengers/{passengerId}": {
+      "schema": { "$ref": "#/entities/SavedPassenger" },
+      "description": "Saved passenger profiles isolated by owner userId and admin access."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRole" },
+      "description": "Authoritative admin and super_admin role documents."
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "Flight booking requests and confirmed reservations."
+    },
+    "/flightRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/FlightRequest" },
+      "description": "Customer-driven flight booking requests with admin quotation comparisons, selection, payment verification, and airline e-tickets."
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Payment transaction records and uploaded manual receipts."
+    },
+    "/flightOffers/{offerId}": {
+      "schema": { "$ref": "#/entities/FlightOffer" },
+      "description": "Manual quotation flight offers managed by admins."
+    },
+    "/destinations/{destinationId}": {
+      "schema": { "$ref": "#/entities/Destination" },
+      "description": "Featured travel destinations displayed on the site."
+    },
+    "/travelPackages/{packageId}": {
+      "schema": { "$ref": "#/entities/TravelPackage" },
+      "description": "Tour, honeymoon, holiday, and Hajj & Umrah packages managed by admins."
+    },
+    "/offers/{offerId}": {
+      "schema": { "$ref": "#/entities/SpecialOffer" },
+      "description": "Promotional seasonal offers managed by admins."
+    },
+    "/testimonials/{testimonialId}": {
+      "schema": { "$ref": "#/entities/Testimonial" },
+      "description": "Customer reviews managed by admins."
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/Inquiry" },
+      "description": "Customer contact inquiries and booking support requests."
+    },
+    "/newsletter/{subscriberId}": {
+      "schema": { "$ref": "#/entities/NewsletterSubscriber" },
+      "description": "Newsletter subscriber emails."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User-scoped booking and payment notifications."
+    },
+    "/websiteSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/WebsiteSettings" },
+      "description": "Public agency configuration, payment instructions, and legal page content."
+    },
+    "/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/WebsiteSettings" },
+      "description": "Public agency configuration alias for backward compatibility."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable admin audit log records."
+    }
+  }
+}
