@@ -33,6 +33,8 @@ const ALL_REQUEST_STATUSES: FlightRequestStatus[] = [
 
 interface AdminFlightRequestsTabProps {
   requests: FlightRequestRecord[];
+  isDemoSandbox?: boolean;
+  onDemoUpdateRequest?: (updated: FlightRequestRecord) => void;
   onLogAudit: (
     action: string,
     targetCollection: string,
@@ -44,6 +46,8 @@ interface AdminFlightRequestsTabProps {
 
 export function AdminFlightRequestsTab({
   requests,
+  isDemoSandbox = false,
+  onDemoUpdateRequest,
   onLogAudit,
   onToast,
 }: AdminFlightRequestsTabProps) {
@@ -243,6 +247,34 @@ export function AdminFlightRequestsTab({
 
     setSaving(true);
     try {
+      if (isDemoSandbox && onDemoUpdateRequest) {
+        onDemoUpdateRequest({
+          ...selected,
+          status: nextStatus,
+          paymentStatus: nextPayStatus,
+          quotations: editQuotations,
+          supplierProvider: editSupplierProvider.trim(),
+          supplierReference: editSupplierRef.trim().toUpperCase(),
+          ticketFileUrl: editTicketUrl || '',
+          ticketFileName: editTicketName || '',
+          adminNotes: editAdminNotes.trim(),
+          updatedAt: { seconds: Math.floor(Date.now() / 1000), toDate: () => new Date() },
+        });
+        await onLogAudit(
+          `Updated flight request ${selected.requestReference} (${nextStatus})`,
+          'flightRequests',
+          selected.requestId,
+          `Status=${nextStatus}, Payment=${nextPayStatus}, Quotes=${editQuotations.length}, PNR=${editSupplierRef || 'none'}`
+        );
+        onToast(
+          'Flight Request Updated (Demo Sandbox)',
+          `${selected.requestReference} updated locally as ${nextStatus}.`,
+          'success'
+        );
+        setSelected(null);
+        return;
+      }
+
       await updateDoc(doc(db, 'flightRequests', selected.requestId), {
         status: nextStatus,
         paymentStatus: nextPayStatus,

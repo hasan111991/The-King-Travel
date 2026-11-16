@@ -10,10 +10,16 @@ import {
 } from 'firebase/firestore';
 import {
   BarChart3,
+  Copy,
   CreditCard,
+  Eye,
+  EyeOff,
   FileSpreadsheet,
   Globe,
+  KeyRound,
+  Lock,
   LogOut,
+  Mail,
   MessageSquare,
   Plane,
   Send,
@@ -41,6 +47,12 @@ import {
 import { useAgency } from '../context/AgencyContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import {
+  createInitialDemoAdminState,
+  DEMO_ADMIN_EMAIL,
+  DEMO_ADMIN_PASSWORD,
+  DEMO_ADMIN_UID,
+} from '../lib/demoAdminData';
 import { db, generateId } from '../lib/firebase';
 import type {
   AdminRoleRecord,
@@ -64,7 +76,19 @@ type AdminTab =
   | 'reports';
 
 export function AdminDashboardPage() {
-  const { user, isAdmin, isSuperAdmin, authReady, loginWithGoogle, logout } = useAuth();
+  const {
+    user,
+    isAdmin,
+    isSuperAdmin,
+    isDemoAdmin,
+    authReady,
+    loginWithGoogle,
+    loginWithEmail,
+    loginDemoAdmin,
+    resendVerificationEmail,
+    refreshProfile,
+    logout,
+  } = useAuth();
   const {
     settings,
     destinations,
@@ -78,6 +102,13 @@ export function AdminDashboardPage() {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
+  // Admin gate login form state
+  const [adminEmailInput, setAdminEmailInput] = useState('');
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
   const [tab, setTab] = useState<AdminTab>('overview');
   const [flightRequests, setFlightRequests] = useState<FlightRequestRecord[]>([]);
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
@@ -89,6 +120,10 @@ export function AdminDashboardPage() {
   const [supplierStatus, setSupplierStatus] = useState<
     Array<{ provider: string; name: string; configured: boolean; environment: string }>
   >([]);
+
+  const isLiveAdmin = Boolean(user && isAdmin);
+  const isDemoSandbox = Boolean(isDemoAdmin && !isLiveAdmin);
+  const hasAdminAccess = isLiveAdmin || isDemoSandbox;
 
   useEffect(() => {
     fetch('/api/integrations/status')
@@ -102,8 +137,23 @@ export function AdminDashboardPage() {
       .catch(() => {});
   }, []);
 
+  // Load either Live Firestore streams OR Demo Sandbox state
   useEffect(() => {
-    if (!authReady || !user || !isAdmin) return;
+    if (!authReady) return;
+
+    if (isDemoSandbox) {
+      const demo = createInitialDemoAdminState();
+      setFlightRequests(demo.flightRequests);
+      setBookings(demo.bookings);
+      setPayments(demo.payments);
+      setCustomers(demo.customers);
+      setInquiries(demo.inquiries);
+      setAuditLogs(demo.auditLogs);
+      setAdmins(demo.admins);
+      return;
+    }
+
+    if (!user || !isAdmin) return;
 
     const unsubs = [
       onSnapshot(
@@ -164,12 +214,28 @@ export function AdminDashboardPage() {
     ];
 
     return () => unsubs.forEach((u) => u());
-  }, [authReady, user, isAdmin]);
+  }, [authReady, user, isAdmin, isDemoSandbox]);
 
   const logAudit = useCallback(
     async (action: string, targetCollection: string, targetId: string, details: string) => {
-      if (!user) return;
       const logId = generateId('log');
+      if (isDemoSandbox) {
+        setAuditLogs((prev) => [
+          {
+            logId,
+            actorUid: DEMO_ADMIN_UID,
+            actorEmail: DEMO_ADMIN_EMAIL,
+            action,
+            targetCollection,
+            targetId,
+            details,
+            createdAt: { seconds: Math.floor(Date.now() / 1000), toDate: () => new Date() },
+          },
+          ...prev,
+        ]);
+        return;
+      }
+      if (!user) return;
       await setDoc(doc(db, 'auditLogs', logId), {
         logId,
         actorUid: user.uid,
@@ -181,10 +247,18 @@ export function AdminDashboardPage() {
         createdAt: serverTimestamp(),
       });
     },
-    [user]
+    [user, isDemoSandbox]
   );
 
   const handleToggleMode = async (mode: 'demo' | 'live') => {
+    if (isDemoSandbox) {
+      showToast(
+        'Demo Admin Sandbox',
+        'Global operating mode in Firestore can only be toggled when signed in with Live Firebase Super Admin.',
+        'info'
+      );
+      return;
+    }
     try {
       const payload = buildSanitizedSettingsPayload({
         ...settings,
@@ -205,6 +279,83 @@ export function AdminDashboardPage() {
     }
   };
 
+  const handleEmailAdminSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    const trimmedEmail = adminEmailInput.trim();
+
+    if (trimmedEmail.toLowerCase() === DEMO_ADMIN_EMAIL.toLowerCase()) {
+      const ok = loginDemoAdmin(trimmedEmail, adminPasswordInput);
+      if (ok) {
+        showToast(
+          'Demo Admin Signed In',
+          'You are viewing the interactive Demo Admin Operations Console.',
+          'success'
+        );
+      } else {
+        setLoginError(
+          `Incorrect password for ${DEMO_ADMIN_EMAIL}. Use password "${DEMO_ADMIN_PASSWORD}" or click "Quick Demo Admin Login" below.`
+        );
+      }
+      return;
+    }
+
+    setLoginBusy(true);
+    try {
+      await loginWithEmail(trimmedEmail, adminPasswordInput);
+      showToast('Admin Sign-In Verified', 'Checking administrator permissions...', 'info');
+    } catch (err: any) {
+      const code = err?.code || '';
+      if (code === 'auth/operation-not-allowed') {
+        setLoginError(
+          'Email/Password provider is not enabled yet in Firebase Authentication Console. Use "Admin Sign In with Google" or sign in with the Demo Admin credentials below.'
+        );
+      } else if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        setLoginError(
+          'Invalid Firebase Admin email or password. For demo evaluation, use the Demo Admin credentials below.'
+        );
+      } else {
+        setLoginError(err instanceof Error ? err.message : 'Unable to sign in.');
+      }
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const handleQuickDemoLogin = () => {
+    setLoginError(null);
+    setAdminEmailInput(DEMO_ADMIN_EMAIL);
+    setAdminPasswordInput(DEMO_ADMIN_PASSWORD);
+    const ok = loginDemoAdmin(DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD);
+    if (ok) {
+      showToast(
+        'Demo Admin Signed In',
+        'Interactive Demo Operations Console unlocked.',
+        'success'
+      );
+    }
+  };
+
+  const handleGoogleAdmin = async () => {
+    setLoginError(null);
+    setLoginBusy(true);
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      const code = err?.code || '';
+      if (code === 'auth/unauthorized-domain') {
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+        setLoginError(
+          `Domain "${host}" is not authorized in Firebase Console > Authentication > Settings > Authorized domains yet. Add "${host}" there or use the Demo Admin Login below.`
+        );
+      } else {
+        setLoginError(err instanceof Error ? err.message : 'Google sign-in was cancelled or blocked.');
+      }
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
   if (!authReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F7F9FC] text-sm text-[#627D98]">
@@ -214,44 +365,181 @@ export function AdminDashboardPage() {
   }
 
   // Protected Admin Gate
-  if (!user || !isAdmin) {
+  if (!hasAdminAccess) {
     return (
-      <div className="min-h-screen bg-[#102A43] flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white rounded-2xl p-8 space-y-5 text-center shadow-2xl">
-          <div className="inline-flex justify-center">
-            <BrandLogo variant="dark" size="md" />
+      <div className="min-h-screen bg-[#102A43] flex items-center justify-center px-4 py-10">
+        <div className="max-w-md w-full bg-white rounded-2xl p-6 sm:p-8 space-y-5 shadow-2xl">
+          <div className="text-center space-y-2">
+            <div className="inline-flex justify-center">
+              <BrandLogo variant="dark" size="md" />
+            </div>
+            <ShieldAlert className="w-9 h-9 text-[#D4AF37] mx-auto" />
+            <h1 className="font-display text-2xl font-bold text-[#102A43]">
+              Admin Operations Portal
+            </h1>
+            <p className="text-xs text-[#486581] leading-relaxed">
+              {!user
+                ? 'Sign in with an authorized administrator account or launch the Demo Admin Console.'
+                : !user.emailVerified
+                ? `Signed in as ${user.email}, but your email is not verified yet.`
+                : `Signed in as ${user.email}, which does not have live Firestore administrator privileges.`}
+            </p>
           </div>
-          <ShieldAlert className="w-10 h-10 text-[#D4AF37] mx-auto" />
-          <h1 className="font-display text-2xl font-bold text-[#102A43]">
-            Restricted Admin Portal
-          </h1>
-          <p className="text-xs text-[#486581] leading-relaxed">
-            {!user
-              ? 'Sign in with an authorized administrator account to access The King Travel Operations Console.'
-              : `Signed in as ${user.email}, which does not have administrator privileges.`}
-          </p>
-          <div className="flex flex-col gap-2.5 pt-2">
+
+          {user && !user.emailVerified && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2">
+              <p>Verify your email inbox link, then click Refresh Status to unlock live access.</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    resendVerificationEmail()
+                      .then(() => showToast('Email Sent', 'Check your inbox.', 'success'))
+                      .catch(() => {})
+                  }
+                  className="px-3 py-1.5 rounded-lg bg-[#102A43] text-white font-semibold"
+                >
+                  Resend Verification
+                </button>
+                <button
+                  type="button"
+                  onClick={() => refreshProfile().catch(() => {})}
+                  className="px-3 py-1.5 rounded-lg border border-[#D9E2EC] bg-white font-semibold text-[#102A43]"
+                >
+                  Refresh Status
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Email & Password Admin Form */}
+          <form onSubmit={handleEmailAdminSubmit} className="space-y-3 text-left">
+            <div>
+              <label className="block text-xs font-semibold text-[#486581] mb-1">
+                Admin Email
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-[#627D98] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  required
+                  value={adminEmailInput}
+                  onChange={(e) => setAdminEmailInput(e.target.value)}
+                  placeholder="admin@thekingtravel.com"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-[#D9E2EC] text-sm text-[#102A43]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[#486581] mb-1">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-[#627D98] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
+                  placeholder="Enter admin password"
+                  className="w-full pl-9 pr-10 py-2 rounded-lg border border-[#D9E2EC] text-sm text-[#102A43]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#627D98] hover:text-[#102A43]"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {loginError && (
+              <div role="alert" className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 leading-relaxed">
+                {loginError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loginBusy}
+              className="w-full py-2.5 rounded-lg bg-[#102A43] hover:bg-[#193B5C] text-white text-sm font-semibold disabled:opacity-60"
+            >
+              {loginBusy ? 'Signing In...' : 'Sign In with Email'}
+            </button>
+          </form>
+
+          {/* Demo Admin Credentials Box */}
+          <div className="rounded-xl border border-[#D4AF37]/40 bg-[#FFFDF7] p-4 space-y-2.5 text-left">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#102A43]">
+                <KeyRound className="w-3.5 h-3.5 text-[#D4AF37]" />
+                Demo Admin Credentials
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard
+                    ?.writeText(`${DEMO_ADMIN_EMAIL} / ${DEMO_ADMIN_PASSWORD}`)
+                    .then(() => showToast('Copied', 'Demo credentials copied to clipboard.', 'info'))
+                    .catch(() => {});
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#486581] hover:text-[#102A43]"
+              >
+                <Copy className="w-3 h-3" /> Copy
+              </button>
+            </div>
+            <div className="text-xs font-mono text-[#243B53] bg-white border border-[#E6ECF2] rounded-lg px-3 py-2 space-y-1">
+              <p>
+                <span className="text-[#627D98]">Email:</span> {DEMO_ADMIN_EMAIL}
+              </p>
+              <p>
+                <span className="text-[#627D98]">Password:</span> {DEMO_ADMIN_PASSWORD}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleQuickDemoLogin}
+              className="w-full py-2 rounded-lg bg-[#D4AF37] hover:bg-[#C39B28] text-[#102A43] text-xs font-bold transition-colors"
+            >
+              Auto-Fill &amp; Sign In as Demo Admin
+            </button>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[#E6ECF2]" />
+            </div>
+            <div className="relative flex justify-center text-[11px]">
+              <span className="bg-white px-2.5 text-[#627D98]">live production admin</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2">
             {!user ? (
               <button
                 type="button"
-                onClick={() => loginWithGoogle().catch(() => {})}
-                className="w-full py-2.5 rounded-lg bg-[#102A43] text-white text-sm font-semibold"
+                disabled={loginBusy}
+                onClick={handleGoogleAdmin}
+                className="w-full py-2.5 rounded-lg border border-[#D9E2EC] bg-white hover:bg-[#F7F9FC] text-[#102A43] text-xs font-semibold"
               >
-                Admin Sign In with Google
+                Live Super Admin Sign In with Google
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => logout()}
-                className="w-full py-2.5 rounded-lg bg-[#102A43] text-white text-sm font-semibold"
+                className="w-full py-2.5 rounded-lg border border-[#D9E2EC] bg-white hover:bg-[#F7F9FC] text-[#102A43] text-xs font-semibold"
               >
-                Switch Account
+                Sign Out ({user.email})
               </button>
             )}
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="w-full py-2 rounded-lg border border-[#D9E2EC] text-xs font-semibold text-[#486581]"
+              className="w-full py-2 rounded-lg text-xs font-semibold text-[#627D98] hover:text-[#102A43]"
             >
               Return to Public Website
             </button>
@@ -280,6 +568,10 @@ export function AdminDashboardPage() {
     { id: 'reports', label: 'Reports & Audit', icon: FileSpreadsheet },
   ];
 
+  const activeEmail = isLiveAdmin ? user?.email || '' : DEMO_ADMIN_EMAIL;
+  const activeUid = isLiveAdmin ? user?.uid || '' : DEMO_ADMIN_UID;
+  const roleLabel = isLiveAdmin ? (isSuperAdmin ? 'Super Admin' : 'Admin') : 'Demo Sandbox';
+
   return (
     <div className="min-h-screen bg-[#F9F9FA] flex flex-col lg:flex-row">
       {/* Admin Left Sidebar */}
@@ -288,7 +580,7 @@ export function AdminDashboardPage() {
           <div className="px-5 py-5 border-b border-[#193B5C]">
             <BrandLogo variant="light" size="sm" />
             <p className="text-[11px] text-[#9FB3C8] mt-1.5">
-              Operations Console · {isSuperAdmin ? 'Super Admin' : 'Admin'}
+              Operations Console · {roleLabel}
             </p>
           </div>
           <nav className="p-3 space-y-1 flex lg:flex-col overflow-x-auto">
@@ -320,7 +612,7 @@ export function AdminDashboardPage() {
         </div>
 
         <div className="p-4 border-t border-[#1C3D5A] hidden lg:block space-y-2">
-          <p className="text-[11px] text-[#9FB3C8] truncate">{user.email}</p>
+          <p className="text-[11px] text-[#9FB3C8] truncate">{activeEmail}</p>
           <button
             type="button"
             onClick={() => logout().then(() => navigate('/'))}
@@ -341,6 +633,13 @@ export function AdminDashboardPage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
+              onClick={() => logout()}
+              className="lg:hidden px-3 py-1.5 rounded-lg border border-[#D9E2EC] text-xs font-semibold text-[#102A43]"
+            >
+              Sign Out
+            </button>
+            <button
+              type="button"
               onClick={() => navigate('/')}
               className="px-3.5 py-1.5 rounded-lg border border-[#D9E2EC] text-xs font-semibold text-[#102A43] hover:bg-[#F7F9FC]"
             >
@@ -348,6 +647,21 @@ export function AdminDashboardPage() {
             </button>
           </div>
         </header>
+
+        {isDemoSandbox && (
+          <div className="bg-[#FFFBEB] border-b border-[#FDE68A] px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-[#92400E]">
+            <span>
+              <strong>Demo Admin Sandbox Active ({DEMO_ADMIN_EMAIL})</strong> — Viewing sample operations data. Actions update this browser session only without modifying live Firestore.
+            </span>
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="px-3 py-1 rounded-md bg-[#102A43] text-white font-semibold text-[11px]"
+            >
+              Switch to Live Firebase Admin
+            </button>
+          </div>
+        )}
 
         <main className="p-4 sm:p-6 lg:p-8 flex-1">
           {tab === 'overview' && (
@@ -360,6 +674,14 @@ export function AdminDashboardPage() {
               supplierStatus={supplierStatus}
               onToggleMode={handleToggleMode}
               onSeedCatalog={async () => {
+                if (isDemoSandbox) {
+                  showToast(
+                    'Demo Sandbox Mode',
+                    'Seeding Firestore catalog requires signing in with Live Firebase Super Admin.',
+                    'info'
+                  );
+                  return;
+                }
                 await seedDefaultCatalog();
                 await logAudit('Seeded default catalog', 'settings', 'public', 'Initialized destinations, offers, testimonials');
                 showToast('Catalog Initialized', 'Default agency catalog written to Firestore.', 'success');
@@ -370,6 +692,12 @@ export function AdminDashboardPage() {
           {tab === 'requests' && (
             <AdminFlightRequestsTab
               requests={flightRequests}
+              isDemoSandbox={isDemoSandbox}
+              onDemoUpdateRequest={(updated) =>
+                setFlightRequests((prev) =>
+                  prev.map((item) => (item.requestId === updated.requestId ? updated : item))
+                )
+              }
               onLogAudit={logAudit}
               onToast={showToast}
             />
@@ -379,6 +707,12 @@ export function AdminDashboardPage() {
             <AdminBookingsTab
               bookings={bookings}
               agencyName={settings.agencyName}
+              isDemoSandbox={isDemoSandbox}
+              onDemoUpdateBooking={(updated) =>
+                setBookings((prev) =>
+                  prev.map((item) => (item.bookingId === updated.bookingId ? updated : item))
+                )
+              }
               onLogAudit={logAudit}
               onToast={showToast}
             />
@@ -388,6 +722,40 @@ export function AdminDashboardPage() {
             <AdminPaymentsTab
               payments={payments}
               bookings={bookings}
+              isDemoSandbox={isDemoSandbox}
+              onDemoUpdatePayment={(paymentId, decision, remarks) => {
+                const target = payments.find((p) => p.paymentId === paymentId);
+                setPayments((prev) =>
+                  prev.map((p) =>
+                    p.paymentId === paymentId
+                      ? { ...p, verificationStatus: decision, adminRemarks: remarks }
+                      : p
+                  )
+                );
+                if (target) {
+                  setBookings((prev) =>
+                    prev.map((b) =>
+                      b.bookingId === target.bookingId
+                        ? {
+                            ...b,
+                            paymentStatus:
+                              decision === 'verified'
+                                ? 'confirmed'
+                                : decision === 'rejected'
+                                ? 'rejected'
+                                : 'refunded',
+                            bookingStatus:
+                              decision === 'verified'
+                                ? 'Payment Confirmed'
+                                : decision === 'rejected'
+                                ? 'Pending Payment'
+                                : 'Refunded',
+                          }
+                        : b
+                    )
+                  );
+                }
+              }}
               onLogAudit={logAudit}
               onToast={showToast}
             />
@@ -397,6 +765,12 @@ export function AdminDashboardPage() {
             <AdminCustomersTab
               customers={customers}
               bookings={bookings}
+              isDemoSandbox={isDemoSandbox}
+              onDemoToggleCustomer={(uid, nextStatus) =>
+                setCustomers((prev) =>
+                  prev.map((c) => (c.uid === uid ? { ...c, status: nextStatus } : c))
+                )
+              }
               onLogAudit={logAudit}
               onToast={showToast}
             />
@@ -405,6 +779,7 @@ export function AdminDashboardPage() {
           {tab === 'offers' && (
             <AdminFlightOffersTab
               offers={manualFlightOffers}
+              isDemoSandbox={isDemoSandbox}
               onLogAudit={logAudit}
               onToast={showToast}
             />
@@ -417,6 +792,7 @@ export function AdminDashboardPage() {
               travelPackages={travelPackages}
               specialOffers={specialOffers}
               testimonials={testimonials}
+              isDemoSandbox={isDemoSandbox}
               onLogAudit={logAudit}
               onToast={showToast}
             />
@@ -425,6 +801,14 @@ export function AdminDashboardPage() {
           {tab === 'inquiries' && (
             <AdminInquiriesTab
               inquiries={inquiries}
+              isDemoSandbox={isDemoSandbox}
+              onDemoReplyInquiry={(inquiryId, status, reply) =>
+                setInquiries((prev) =>
+                  prev.map((i) =>
+                    i.inquiryId === inquiryId ? { ...i, status, adminReply: reply } : i
+                  )
+                )
+              }
               onLogAudit={logAudit}
               onToast={showToast}
             />
@@ -437,8 +821,9 @@ export function AdminDashboardPage() {
               customers={customers}
               auditLogs={auditLogs}
               admins={admins}
-              isSuperAdmin={isSuperAdmin}
-              currentUid={user.uid}
+              isSuperAdmin={isSuperAdmin || isDemoSandbox}
+              isDemoSandbox={isDemoSandbox}
+              currentUid={activeUid}
               onLogAudit={logAudit}
               onToast={showToast}
             />

@@ -30,6 +30,8 @@ const ALL_PAYMENT_STATUSES: PaymentStatus[] = [
 interface AdminBookingsTabProps {
   bookings: BookingRecord[];
   agencyName: string;
+  isDemoSandbox?: boolean;
+  onDemoUpdateBooking?: (updated: BookingRecord) => void;
   onLogAudit: (action: string, targetCollection: string, targetId: string, details: string) => Promise<void>;
   onToast: (title: string, msg?: string, variant?: 'success' | 'error' | 'info') => void;
 }
@@ -37,6 +39,8 @@ interface AdminBookingsTabProps {
 export function AdminBookingsTab({
   bookings,
   agencyName,
+  isDemoSandbox = false,
+  onDemoUpdateBooking,
   onLogAudit,
   onToast,
 }: AdminBookingsTabProps) {
@@ -110,6 +114,28 @@ export function AdminBookingsTab({
     if (!selected) return;
     setSaving(true);
     try {
+      if (isDemoSandbox && onDemoUpdateBooking) {
+        onDemoUpdateBooking({
+          ...selected,
+          bookingStatus: editStatus,
+          paymentStatus: editPayStatus,
+          supplierReference: editPnr.trim(),
+          internalNotes: editNotes.trim(),
+          ticketFileUrl: ticketFileUrl || '',
+          ticketFileName: ticketFileName || '',
+          updatedAt: { seconds: Math.floor(Date.now() / 1000), toDate: () => new Date() },
+        });
+        await onLogAudit(
+          `Updated booking ${selected.bookingReference}`,
+          'bookings',
+          selected.bookingId,
+          `Status=${editStatus}, Payment=${editPayStatus}, PNR=${editPnr || 'none'}`
+        );
+        onToast('Booking Updated (Demo Sandbox)', `${selected.bookingReference} updated locally.`, 'success');
+        setSelected(null);
+        return;
+      }
+
       await updateDoc(doc(db, 'bookings', selected.bookingId), {
         bookingStatus: editStatus,
         paymentStatus: editPayStatus,

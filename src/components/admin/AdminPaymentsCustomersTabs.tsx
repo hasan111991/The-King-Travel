@@ -9,6 +9,12 @@ import type { BookingRecord, PaymentRecord, UserProfile } from '../../types/trav
 interface AdminPaymentsTabProps {
   payments: PaymentRecord[];
   bookings: BookingRecord[];
+  isDemoSandbox?: boolean;
+  onDemoUpdatePayment?: (
+    paymentId: string,
+    decision: 'verified' | 'rejected' | 'refunded',
+    remarks: string
+  ) => void;
   onLogAudit: (action: string, targetCollection: string, targetId: string, details: string) => Promise<void>;
   onToast: (title: string, msg?: string, variant?: 'success' | 'error' | 'info') => void;
 }
@@ -16,6 +22,8 @@ interface AdminPaymentsTabProps {
 export function AdminPaymentsTab({
   payments,
   bookings,
+  isDemoSandbox = false,
+  onDemoUpdatePayment,
   onLogAudit,
   onToast,
 }: AdminPaymentsTabProps) {
@@ -27,6 +35,20 @@ export function AdminPaymentsTab({
     decision: 'verified' | 'rejected' | 'refunded'
   ) => {
     try {
+      if (isDemoSandbox && onDemoUpdatePayment) {
+        onDemoUpdatePayment(payment.paymentId, decision, remarks.trim() || `Marked ${decision} by demo admin`);
+        await onLogAudit(
+          `Payment ${decision}`,
+          'payments',
+          payment.paymentId,
+          `Booking=${payment.bookingId}, Amount=${payment.currency} ${payment.amount}`
+        );
+        onToast('Payment Updated (Demo Sandbox)', `Marked as ${decision} locally.`, 'success');
+        setInspecting(null);
+        setRemarks('');
+        return;
+      }
+
       await updateDoc(doc(db, 'payments', payment.paymentId), {
         verificationStatus: decision,
         adminRemarks: remarks.trim() || `Marked ${decision} by admin`,
@@ -247,6 +269,8 @@ export function AdminPaymentsTab({
 interface AdminCustomersTabProps {
   customers: UserProfile[];
   bookings: BookingRecord[];
+  isDemoSandbox?: boolean;
+  onDemoToggleCustomer?: (uid: string, nextStatus: 'active' | 'blocked') => void;
   onLogAudit: (action: string, targetCollection: string, targetId: string, details: string) => Promise<void>;
   onToast: (title: string, msg?: string, variant?: 'success' | 'error' | 'info') => void;
 }
@@ -254,6 +278,8 @@ interface AdminCustomersTabProps {
 export function AdminCustomersTab({
   customers,
   bookings,
+  isDemoSandbox = false,
+  onDemoToggleCustomer,
   onLogAudit,
   onToast,
 }: AdminCustomersTabProps) {
@@ -273,6 +299,13 @@ export function AdminCustomersTab({
   const toggleStatus = async (c: UserProfile) => {
     const nextStatus = c.status === 'active' ? 'blocked' : 'active';
     try {
+      if (isDemoSandbox && onDemoToggleCustomer) {
+        onDemoToggleCustomer(c.uid, nextStatus);
+        await onLogAudit(`Set customer status=${nextStatus}`, 'users', c.uid, c.email);
+        onToast('Customer Updated (Demo Sandbox)', `${c.name} is now ${nextStatus} locally.`, 'info');
+        return;
+      }
+
       await updateDoc(doc(db, 'users', c.uid), {
         status: nextStatus,
         updatedAt: serverTimestamp(),

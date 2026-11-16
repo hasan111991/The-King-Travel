@@ -4,9 +4,10 @@ import { Lock, Mail, Phone, User } from 'lucide-react';
 import { BrandLogo } from '../components/BrandLogo';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { DEMO_ADMIN_EMAIL } from '../lib/demoAdminData';
 
 export function AuthPage({ mode = 'login' }: { mode?: 'login' | 'register' }) {
-  const { user, loginWithGoogle, loginWithEmail, registerWithEmail, sendResetEmail } = useAuth();
+  const { user, loginWithGoogle, loginWithEmail, loginDemoAdmin, registerWithEmail, sendResetEmail } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -60,6 +61,14 @@ export function AuthPage({ mode = 'login' }: { mode?: 'login' | 'register' }) {
     setBusy(true);
     try {
       if (tab === 'login') {
+        if (email.trim().toLowerCase() === DEMO_ADMIN_EMAIL.toLowerCase()) {
+          if (loginDemoAdmin(email, password)) {
+            showToast('Demo Admin Signed In', 'Opening Admin Operations Console.', 'success');
+            navigate('/admin', { replace: true });
+            return;
+          }
+          throw new Error('For Demo Admin login, please sign in via the Admin Portal (/admin).');
+        }
         await loginWithEmail(email, password);
         showToast('Signed In', 'Welcome back to The King Travel.', 'success');
         navigate(redirectTo, { replace: true });
@@ -274,9 +283,14 @@ export function AuthPage({ mode = 'login' }: { mode?: 'login' | 'register' }) {
               Back to Sign In
             </button>
           )}
-          <Link to="/terms" className="hover:text-[#102A43]">
-            Terms & Privacy
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/admin" className="hover:text-[#102A43] font-medium">
+              Admin Portal
+            </Link>
+            <Link to="/terms" className="hover:text-[#102A43]">
+              Terms & Privacy
+            </Link>
+          </div>
         </div>
       </div>
     </div>

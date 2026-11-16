@@ -39,11 +39,12 @@ export function buildSanitizedSettingsPayload(s: AgencySettings) {
 
 interface AdminOffersTabProps {
   offers: ManualFlightOffer[];
+  isDemoSandbox?: boolean;
   onLogAudit: (action: string, targetCollection: string, targetId: string, details: string) => Promise<void>;
   onToast: (title: string, msg?: string, variant?: 'success' | 'error' | 'info') => void;
 }
 
-export function AdminFlightOffersTab({ offers, onLogAudit, onToast }: AdminOffersTabProps) {
+export function AdminFlightOffersTab({ offers, isDemoSandbox = false, onLogAudit, onToast }: AdminOffersTabProps) {
   const [airline, setAirline] = useState('');
   const [airlineCode, setAirlineCode] = useState('EK');
   const [flightNumber, setFlightNumber] = useState('');
@@ -60,6 +61,15 @@ export function AdminFlightOffersTab({ offers, onLogAudit, onToast }: AdminOffer
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDemoSandbox) {
+      await onLogAudit('Previewed flight offer creation', 'flightOffers', 'demo', `${originCode}->${destinationCode}`);
+      onToast(
+        'Demo Sandbox Read-Only Catalog',
+        'Public flight offers in Firestore require signing in as Live Firebase Super Admin (hasanaamir815@gmail.com).',
+        'info'
+      );
+      return;
+    }
     const offerId = generateId('flt');
     try {
       await setDoc(doc(db, 'flightOffers', offerId), {
@@ -96,6 +106,14 @@ export function AdminFlightOffersTab({ offers, onLogAudit, onToast }: AdminOffer
   };
 
   const handleDelete = async (offerId: string) => {
+    if (isDemoSandbox) {
+      onToast(
+        'Demo Sandbox Read-Only Catalog',
+        'Deleting public offers requires a Live Firebase Admin session.',
+        'info'
+      );
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'flightOffers', offerId));
       await onLogAudit('Deleted flight offer', 'flightOffers', offerId, 'Removed manual offer');
@@ -190,6 +208,7 @@ interface AdminCmsTabProps {
   travelPackages: TravelPackageItem[];
   specialOffers: SpecialOfferItem[];
   testimonials: TestimonialItem[];
+  isDemoSandbox?: boolean;
   onLogAudit: (action: string, targetCollection: string, targetId: string, details: string) => Promise<void>;
   onToast: (title: string, msg?: string, variant?: 'success' | 'error' | 'info') => void;
 }
@@ -200,6 +219,7 @@ export function AdminCmsAndSettingsTab({
   travelPackages,
   specialOffers,
   testimonials,
+  isDemoSandbox = false,
   onLogAudit,
   onToast,
 }: AdminCmsTabProps) {
@@ -240,8 +260,19 @@ export function AdminCmsAndSettingsTab({
   const [pkgServices, setPkgServices] = useState('Round-Trip Flights, Hotel Stay, Airport Transfers');
   const [pkgDesc, setPkgDesc] = useState('');
 
+  const guardDemoCms = (actionLabel: string) => {
+    if (!isDemoSandbox) return false;
+    onToast(
+      'Demo Sandbox Mode',
+      `${actionLabel} requires signing in as Live Firebase Super Admin (hasanaamir815@gmail.com) to publish to Firestore.`,
+      'info'
+    );
+    return true;
+  };
+
   const saveAgencySettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (guardDemoCms('Publishing agency settings')) return;
     setSavingSettings(true);
     try {
       const payload = buildSanitizedSettingsPayload(form);
@@ -264,6 +295,7 @@ export function AdminCmsAndSettingsTab({
 
   const addSpecialOffer = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (guardDemoCms('Publishing special offers')) return;
     const offerId = generateId('prom');
     try {
       await setDoc(doc(db, 'offers', offerId), {
@@ -287,6 +319,7 @@ export function AdminCmsAndSettingsTab({
 
   const addTestimonial = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (guardDemoCms('Publishing testimonials')) return;
     const testimonialId = generateId('tst');
     try {
       await setDoc(doc(db, 'testimonials', testimonialId), {
@@ -310,6 +343,7 @@ export function AdminCmsAndSettingsTab({
 
   const addDestination = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (guardDemoCms('Adding destinations')) return;
     const destinationId = generateId('dst');
     const generatedSlug = (destSlug.trim() || destName.trim())
       .toLowerCase()
@@ -344,6 +378,7 @@ export function AdminCmsAndSettingsTab({
 
   const addTravelPackage = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (guardDemoCms('Publishing travel packages')) return;
     const packageId = generateId('pkg');
     const destSlugVal = pkgDestination
       .trim()
@@ -386,6 +421,7 @@ export function AdminCmsAndSettingsTab({
   };
 
   const togglePackageStatus = async (pkg: TravelPackageItem) => {
+    if (guardDemoCms('Updating travel packages')) return;
     const nextStatus = pkg.status === 'active' ? 'inactive' : 'active';
     try {
       await updateDoc(doc(db, 'travelPackages', pkg.packageId), {
@@ -572,7 +608,10 @@ export function AdminCmsAndSettingsTab({
                 </button>
                 <button
                   type="button"
-                  onClick={() => deleteDoc(doc(db, 'travelPackages', pkg.packageId))}
+                  onClick={() => {
+                    if (guardDemoCms('Deleting travel packages')) return;
+                    deleteDoc(doc(db, 'travelPackages', pkg.packageId)).catch(() => {});
+                  }}
                   className="text-red-600"
                   title="Delete package"
                 >
@@ -603,7 +642,16 @@ export function AdminCmsAndSettingsTab({
             {specialOffers.map((o) => (
               <div key={o.offerId} className="py-2 flex items-center justify-between gap-2">
                 <span className="truncate font-medium text-[#0F2942]">{o.title}</span>
-                <button type="button" onClick={() => deleteDoc(doc(db, 'offers', o.offerId))} className="text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (guardDemoCms('Deleting special offers')) return;
+                    deleteDoc(doc(db, 'offers', o.offerId)).catch(() => {});
+                  }}
+                  className="text-red-600"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>
@@ -636,7 +684,16 @@ export function AdminCmsAndSettingsTab({
             {destinations.map((d) => (
               <div key={d.destinationId} className="py-2 flex items-center justify-between gap-2">
                 <span className="truncate font-medium text-[#0F2942]">{d.name} ({d.airportCode})</span>
-                <button type="button" onClick={() => deleteDoc(doc(db, 'destinations', d.destinationId))} className="text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (guardDemoCms('Deleting destinations')) return;
+                    deleteDoc(doc(db, 'destinations', d.destinationId)).catch(() => {});
+                  }}
+                  className="text-red-600"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>
@@ -655,7 +712,16 @@ export function AdminCmsAndSettingsTab({
             {testimonials.map((t) => (
               <div key={t.testimonialId} className="py-2 flex items-center justify-between gap-2">
                 <span className="truncate font-medium text-[#0F2942]">{t.customerName}</span>
-                <button type="button" onClick={() => deleteDoc(doc(db, 'testimonials', t.testimonialId))} className="text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (guardDemoCms('Deleting testimonials')) return;
+                    deleteDoc(doc(db, 'testimonials', t.testimonialId)).catch(() => {});
+                  }}
+                  className="text-red-600"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>

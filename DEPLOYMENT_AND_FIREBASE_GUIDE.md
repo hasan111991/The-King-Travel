@@ -14,14 +14,21 @@
 - `firestore.rules` & `storage.rules` — Zero-Trust security rules
 - `firebase-blueprint.json` — Firestore entity & path blueprint
 
-## 2. Firebase Configuration
+## 2. Firebase & Admin Configuration
 1. **Authentication Providers**:
    - **Google Sign-In** is active and ready.
    - To also enable **Email/Password** login, open Firebase Console -> Authentication -> Sign-in method -> Enable **Email/Password**.
-2. **Firestore Database & Security Rules**:
+2. **Admin Portal Access (`/admin`)**:
+   - **Demo Admin Sandbox Login** (for evaluation without modifying live Firestore):
+     - Email: `admin@thekingtravel.com`
+     - Password: `KingTravel@2026`
+     - Or click **Auto-Fill & Sign In as Demo Admin** on `/admin`.
+   - **Live Super Admin**:
+     - Sign in via Google (or verified Email/Password) with `hasanaamir815@gmail.com`.
+     - Super admins can assign additional verified admins from `/admin` -> **Reports & Audit**.
+3. **Firestore Database & Security Rules**:
    - Rules are defined in `firestore.rules` and enforce strict owner/admin isolation, server timestamps, and schema validation.
-   - The bootstrapped super-admin account email is `hasanaamir815@gmail.com`. Super admins can assign additional admins from `/admin` -> **Reports & Audit**.
-3. **Storage Rules**:
+4. **Storage Rules**:
    - `storage.rules` restricts Payment Receipts (`payment-receipts/{userId}/...`), E-Tickets (`e-tickets/{userId}/...`), and Customer Documents (`customer-documents/{userId}/...`) to the owning user and verified administrators.
 
 ## 3. Flight Supplier API Integration (Live Mode)

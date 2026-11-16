@@ -22,20 +22,29 @@ import {
   testFirestoreConnection,
 } from '../lib/firebase';
 import type { UserProfile } from '../types/travel';
+import {
+  DEMO_ADMIN_EMAIL,
+  DEMO_ADMIN_PASSWORD,
+} from '../lib/demoAdminData';
+
+const DEMO_ADMIN_STORAGE_KEY = 'kt_demo_admin_session';
 
 interface AuthContextValue {
   user: User | null;
   profile: UserProfile | null;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  isDemoAdmin: boolean;
   authReady: boolean;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
+  loginDemoAdmin: (email: string, password: string) => boolean;
   registerWithEmail: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (updates: { name: string; phone: string; whatsapp: string; nationality: string }) => Promise<void>;
   changeUserPassword: (newPassword: string) => Promise<void>;
   sendResetEmail: (email: string) => Promise<void>;
+  resendVerificationEmail: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -46,6 +55,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isDemoAdmin, setIsDemoAdmin] = useState<boolean>(() => {
+    try {
+      return typeof window !== 'undefined' && window.sessionStorage.getItem(DEMO_ADMIN_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [authReady, setAuthReady] = useState(false);
 
   const syncUserProfileAndRoles = useCallback(async (firebaseUser: User | null) => {
@@ -134,14 +150,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsub();
   }, [syncUserProfileAndRoles]);
 
+  const clearDemoAdmin = () => {
+    setIsDemoAdmin(false);
+    try {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(DEMO_ADMIN_STORAGE_KEY);
+      }
+    } catch {}
+  };
+
   const loginWithGoogle = async () => {
+    clearDemoAdmin();
     const cred = await signInWithPopup(auth, googleProvider);
     await syncUserProfileAndRoles(cred.user);
   };
 
   const loginWithEmail = async (email: string, password: string) => {
+    clearDemoAdmin();
     const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
     await syncUserProfileAndRoles(cred.user);
+  };
+
+  const loginDemoAdmin = (email: string, password: string) => {
+    const matched =
+      email.trim().toLowerCase() === DEMO_ADMIN_EMAIL.toLowerCase() &&
+      password === DEMO_ADMIN_PASSWORD;
+    if (!matched) return false;
+    setIsDemoAdmin(true);
+    try {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem(DEMO_ADMIN_STORAGE_KEY, '1');
+      }
+    } catch {}
+    return true;
   };
 
   const registerWithEmail = async (name: string, email: string, password: string, phone?: string) => {
@@ -165,7 +206,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await signOut(auth);
+    clearDemoAdmin();
+    if (auth.currentUser) {
+      await signOut(auth);
+    }
     setProfile(null);
     setIsAdmin(false);
     setIsSuperAdmin(false);
@@ -202,7 +246,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await sendPasswordResetEmail(auth, email.trim());
   };
 
+  const resendVerificationEmail = async () => {
+    if (!auth.currentUser) throw new Error('Not signed in');
+    await sendEmailVerification(auth.currentUser);
+  };
+
   const refreshProfile = async () => {
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+    }
     await syncUserProfileAndRoles(auth.currentUser);
   };
 
@@ -213,14 +265,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile,
         isAdmin,
         isSuperAdmin,
+        isDemoAdmin,
         authReady,
         loginWithGoogle,
         loginWithEmail,
+        loginDemoAdmin,
         registerWithEmail,
         logout,
         updateUserProfile,
         changeUserPassword,
         sendResetEmail,
+        resendVerificationEmail,
         refreshProfile,
       }}
     >

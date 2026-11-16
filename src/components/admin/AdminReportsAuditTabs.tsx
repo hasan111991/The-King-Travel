@@ -14,11 +14,19 @@ import type {
 
 interface InquiriesTabProps {
   inquiries: InquiryItem[];
+  isDemoSandbox?: boolean;
+  onDemoReplyInquiry?: (inquiryId: string, status: InquiryItem['status'], reply: string) => void;
   onLogAudit: (action: string, targetCollection: string, targetId: string, details: string) => Promise<void>;
   onToast: (title: string, msg?: string, variant?: 'success' | 'error' | 'info') => void;
 }
 
-export function AdminInquiriesTab({ inquiries, onLogAudit, onToast }: InquiriesTabProps) {
+export function AdminInquiriesTab({
+  inquiries,
+  isDemoSandbox = false,
+  onDemoReplyInquiry,
+  onLogAudit,
+  onToast,
+}: InquiriesTabProps) {
   const [replyTarget, setReplyTarget] = useState<InquiryItem | null>(null);
   const [replyText, setReplyText] = useState('');
   const [status, setStatus] = useState<'new' | 'in_progress' | 'resolved'>('resolved');
@@ -27,6 +35,15 @@ export function AdminInquiriesTab({ inquiries, onLogAudit, onToast }: InquiriesT
     e.preventDefault();
     if (!replyTarget) return;
     try {
+      if (isDemoSandbox && onDemoReplyInquiry) {
+        onDemoReplyInquiry(replyTarget.inquiryId, status, replyText.trim());
+        await onLogAudit('Replied to inquiry', 'inquiries', replyTarget.inquiryId, status);
+        onToast('Reply Saved (Demo Sandbox)', 'Inquiry status updated locally.', 'success');
+        setReplyTarget(null);
+        setReplyText('');
+        return;
+      }
+
       await updateDoc(doc(db, 'inquiries', replyTarget.inquiryId), {
         status,
         adminReply: replyText.trim(),
@@ -118,6 +135,7 @@ interface ReportsAuditTabProps {
   auditLogs: AuditLogItem[];
   admins: AdminRoleRecord[];
   isSuperAdmin: boolean;
+  isDemoSandbox?: boolean;
   currentUid: string;
   onLogAudit: (action: string, targetCollection: string, targetId: string, details: string) => Promise<void>;
   onToast: (title: string, msg?: string, variant?: 'success' | 'error' | 'info') => void;
@@ -130,6 +148,7 @@ export function AdminReportsAndSecurityTab({
   auditLogs,
   admins,
   isSuperAdmin,
+  isDemoSandbox = false,
   currentUid,
   onLogAudit,
   onToast,
@@ -160,6 +179,14 @@ export function AdminReportsAndSecurityTab({
 
   const assignAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDemoSandbox) {
+      onToast(
+        'Live Super Admin Required',
+        'Assigning RBAC roles requires a Live Firebase Super Admin session.',
+        'info'
+      );
+      return;
+    }
     if (!isSuperAdmin) return;
     try {
       await setDoc(doc(db, 'admins', adminUid.trim()), {
@@ -245,7 +272,21 @@ export function AdminReportsAndSecurityTab({
                 <div key={a.uid} className="py-2 flex items-center justify-between">
                   <span><strong>{a.name}</strong> ({a.email}) · <span className="font-mono">{a.role}</span></span>
                   {a.uid !== currentUid && (
-                    <button type="button" onClick={() => deleteDoc(doc(db, 'admins', a.uid))} className="text-red-600">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isDemoSandbox) {
+                          onToast(
+                            'Live Super Admin Required',
+                            'Removing RBAC roles requires a Live Firebase Super Admin session.',
+                            'info'
+                          );
+                          return;
+                        }
+                        deleteDoc(doc(db, 'admins', a.uid)).catch(() => {});
+                      }}
+                      className="text-red-600"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   )}
