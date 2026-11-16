@@ -1,0 +1,56 @@
+# Netlify Production Deployment Configuration — The King Travel
+# Docs: https://docs.netlify.com/configure-builds/file-based-configuration/
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22"
+  VITE_BASE_PATH = "/"
+  VITE_HASH_ROUTER = "false"
+
+[context.production.environment]
+  NODE_ENV = "production"
+  VITE_BASE_PATH = "/"
+  VITE_HASH_ROUTER = "false"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["server/**"]
+
+# 1. Server-side API proxy (Amadeus, Duffel, Stripe, PayFast, Resend, WhatsApp)
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# 2. React SPA Client-Side Routing Fallback (BrowserRouter deep links & refresh)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# 3. Global Security Headers (compatible with Firebase Google Sign-In popup & CDN fonts)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
+
+# 4. Long-term Immutable Caching for Vite Hashed Assets
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# 5. Revalidate HTML Entry Point Immediately on Deploy
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

@@ -4,21 +4,28 @@ import path from 'path';
 import { defineConfig, type Plugin } from 'vite';
 
 function stripRawRepoFallbackPlugin(): Plugin {
+  let resolvedBase = '/';
   return {
     name: 'strip-raw-repo-fallback',
     apply: 'build',
+    configResolved(config) {
+      resolvedBase = config.base || '/';
+    },
     transformIndexHtml(html) {
-      return html.replace(
-        /\s*<script id="kt-gh-fallback">[\s\S]*?<\/script>\s*/g,
-        '\n    '
-      );
+      let out = html
+        .replace(/\s*<script id="kt-gh-fallback">[\s\S]*?<\/script>\s*/g, '\n    ')
+        .replace(/\s+onerror="window\.__ktFallbackToDocs && window\.__ktFallbackToDocs\(\)"/g, '');
+      if (resolvedBase === '/') {
+        out = out.replace('href="./official-logo.png"', 'href="/official-logo.png"');
+      }
+      return out;
     },
   };
 }
 
 export default defineConfig(() => {
   return {
-    base: process.env.VITE_BASE_PATH || './',
+    base: process.env.VITE_BASE_PATH || '/',
     plugins: [react(), tailwindcss(), stripRawRepoFallbackPlugin()],
     resolve: {
       alias: {

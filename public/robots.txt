@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /my-bookings
+Disallow: /booking/
+Sitemap: https://www.thekingtravel.com/sitemap.xml
