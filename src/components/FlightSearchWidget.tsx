@@ -13,6 +13,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
+import { searchAirportsFallback } from '../lib/staticFallbacks';
 import type { CabinClass, TripType } from '../types/travel';
 
 interface AirportOption {
@@ -129,7 +130,8 @@ export function FlightSearchWidget({
   const fetchAirports = async (q: string, target: 'origin' | 'dest') => {
     try {
       const res = await fetch(`/api/flights/airports?q=${encodeURIComponent(q)}`);
-      if (res.ok) {
+      const isJson = Boolean(res.headers.get('content-type')?.includes('application/json'));
+      if (res.ok && isJson) {
         const data = (await res.json()) as { airports: AirportOption[] };
         if (target === 'origin') setOriginSuggestions(data.airports);
         else setDestSuggestions(data.airports);
@@ -138,13 +140,7 @@ export function FlightSearchWidget({
     } catch {
       // Fallback to local list
     }
-    const lower = q.trim().toLowerCase();
-    const filtered = DEFAULT_AIRPORTS.filter(
-      (a) =>
-        a.code.toLowerCase().includes(lower) ||
-        a.city.toLowerCase().includes(lower) ||
-        a.country.toLowerCase().includes(lower)
-    );
+    const filtered = searchAirportsFallback(q);
     if (target === 'origin') setOriginSuggestions(filtered);
     else setDestSuggestions(filtered);
   };

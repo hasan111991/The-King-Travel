@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>The King Travel</title>
+    <script>
+      (function () {
+        var loc = window.location;
+        var isGithubSubpath = loc.hostname.endsWith('.github.io');
+        var segments = loc.pathname.split('/').filter(Boolean);
+        var base = '/';
+        var routeParts = segments;
+
+        if (isGithubSubpath && segments.length > 0) {
+          base = '/' + segments[0] + '/';
+          routeParts = segments.slice(1);
+        }
+
+        var targetHash = '#/' + routeParts.join('/') + loc.search + loc.hash;
+        loc.replace(loc.origin + base + targetHash);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

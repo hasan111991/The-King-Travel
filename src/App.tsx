@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Footer } from './components/Footer';
 import { Navbar } from './components/Navbar';
@@ -7,12 +7,8 @@ import { AgencyProvider } from './context/AgencyContext';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { AboutPage } from './pages/AboutPage';
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { AuthPage } from './pages/AuthPage';
-import { BookingDetailPage } from './pages/BookingDetailPage';
-import { BookingFlowPage } from './pages/BookingFlowPage';
 import { ContactPage } from './pages/ContactPage';
-import { CustomerDashboardPage } from './pages/CustomerDashboardPage';
 import { DestinationDetailPage } from './pages/DestinationDetailPage';
 import { DestinationsPage } from './pages/DestinationsPage';
 import { FlightRequestPage } from './pages/FlightRequestPage';
@@ -23,6 +19,27 @@ import { HotelsPage } from './pages/HotelsPage';
 import { LegalPage } from './pages/LegalPage';
 import { PackagesPage } from './pages/PackagesPage';
 import { ServicesPage } from './pages/ServicesPage';
+
+const AdminDashboardPage = lazy(() =>
+  import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage }))
+);
+const BookingDetailPage = lazy(() =>
+  import('./pages/BookingDetailPage').then((m) => ({ default: m.BookingDetailPage }))
+);
+const BookingFlowPage = lazy(() =>
+  import('./pages/BookingFlowPage').then((m) => ({ default: m.BookingFlowPage }))
+);
+const CustomerDashboardPage = lazy(() =>
+  import('./pages/CustomerDashboardPage').then((m) => ({ default: m.CustomerDashboardPage }))
+);
+
+function RouteLoadingFallback() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center px-4 text-sm text-[#627D98]">
+      Loading The King Travel...
+    </div>
+  );
+}
 
 class AppErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -105,10 +122,12 @@ function AppLayout() {
     return (
       <>
         <PageMetadataSync />
-        <Routes>
-          <Route path="/admin" element={<AdminDashboardPage />} />
-          <Route path="*" element={<Navigate to="/admin" replace />} />
-        </Routes>
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <Routes>
+            <Route path="/admin" element={<AdminDashboardPage />} />
+            <Route path="*" element={<Navigate to="/admin" replace />} />
+          </Routes>
+        </Suspense>
       </>
     );
   }
@@ -118,37 +137,39 @@ function AppLayout() {
       <PageMetadataSync />
       <Navbar />
       <main className="flex-1">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/flights" element={<FlightsPage />} />
-          <Route path="/flight-request" element={<FlightRequestPage />} />
-          <Route path="/hotels" element={<HotelsPage />} />
-          <Route path="/hajj-umrah" element={<HajjUmrahPage />} />
-          <Route path="/packages" element={<PackagesPage />} />
-          <Route path="/book" element={<BookingFlowPage />} />
-          <Route path="/destinations" element={<DestinationsPage />} />
-          <Route path="/destinations/:slug" element={<DestinationDetailPage />} />
-          <Route path="/services" element={<ServicesPage />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/login" element={<AuthPage mode="login" />} />
-          <Route path="/register" element={<AuthPage mode="register" />} />
-          <Route path="/my-bookings" element={<CustomerDashboardPage />} />
-          <Route path="/booking/:bookingId" element={<BookingDetailPage />} />
-          <Route path="/terms" element={<LegalPage docKey="terms" />} />
-          <Route path="/privacy" element={<LegalPage docKey="privacy" />} />
-          <Route path="/refund-policy" element={<LegalPage docKey="refundPolicy" />} />
-          <Route path="/cancellation-policy" element={<LegalPage docKey="cancellationPolicy" />} />
-          <Route path="/booking-conditions" element={<LegalPage docKey="bookingConditions" />} />
-          {/* Legacy thekingtravel.com URL redirects */}
-          <Route path="/about-us" element={<Navigate to="/about" replace />} />
-          <Route path="/contactus" element={<Navigate to="/contact" replace />} />
-          <Route path="/hajj/umrah" element={<Navigate to="/hajj-umrah" replace />} />
-          <Route path="/honeymoon-packages" element={<Navigate to="/packages?category=honeymoon" replace />} />
-          <Route path="/cc-form" element={<Navigate to="/flights" replace />} />
-          <Route path="/gallery" element={<Navigate to="/destinations" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/flights" element={<FlightsPage />} />
+            <Route path="/flight-request" element={<FlightRequestPage />} />
+            <Route path="/hotels" element={<HotelsPage />} />
+            <Route path="/hajj-umrah" element={<HajjUmrahPage />} />
+            <Route path="/packages" element={<PackagesPage />} />
+            <Route path="/book" element={<BookingFlowPage />} />
+            <Route path="/destinations" element={<DestinationsPage />} />
+            <Route path="/destinations/:slug" element={<DestinationDetailPage />} />
+            <Route path="/services" element={<ServicesPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/contact" element={<ContactPage />} />
+            <Route path="/login" element={<AuthPage mode="login" />} />
+            <Route path="/register" element={<AuthPage mode="register" />} />
+            <Route path="/my-bookings" element={<CustomerDashboardPage />} />
+            <Route path="/booking/:bookingId" element={<BookingDetailPage />} />
+            <Route path="/terms" element={<LegalPage docKey="terms" />} />
+            <Route path="/privacy" element={<LegalPage docKey="privacy" />} />
+            <Route path="/refund-policy" element={<LegalPage docKey="refundPolicy" />} />
+            <Route path="/cancellation-policy" element={<LegalPage docKey="cancellationPolicy" />} />
+            <Route path="/booking-conditions" element={<LegalPage docKey="bookingConditions" />} />
+            {/* Legacy thekingtravel.com URL redirects */}
+            <Route path="/about-us" element={<Navigate to="/about" replace />} />
+            <Route path="/contactus" element={<Navigate to="/contact" replace />} />
+            <Route path="/hajj/umrah" element={<Navigate to="/hajj-umrah" replace />} />
+            <Route path="/honeymoon-packages" element={<Navigate to="/packages?category=honeymoon" replace />} />
+            <Route path="/cc-form" element={<Navigate to="/flights" replace />} />
+            <Route path="/gallery" element={<Navigate to="/destinations" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
       <Footer />
       <WhatsAppButton />

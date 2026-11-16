@@ -50,6 +50,27 @@
   </head>
   <body class="bg-[#F9F9FA] text-[#243B53] antialiased selection:bg-[#FD8F1C]/25 selection:text-[#0F2942]">
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <noscript>
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;font-family:sans-serif;background:#F9F9FA;color:#0F2942;">
+        <p>Please enable JavaScript to view The King Travel.</p>
+      </div>
+    </noscript>
+    <script id="kt-gh-fallback">
+      window.__ktFallbackToDocs = function () {
+        if (window.__ktBooted) return;
+        var loc = window.location;
+        if (/\/docs(\/|$)/.test(loc.pathname)) return;
+        var dir = loc.pathname.endsWith('/')
+          ? loc.pathname
+          : loc.pathname.replace(/\/[^/]*\.[a-zA-Z0-9]+$/, '/');
+        if (!dir.endsWith('/')) dir += '/';
+        loc.replace(loc.origin + dir + 'docs/' + loc.search + loc.hash);
+      };
+    </script>
+    <script
+      type="module"
+      src="/src/main.tsx"
+      onerror="window.__ktFallbackToDocs && window.__ktFallbackToDocs()"
+    ></script>
   </body>
 </html>

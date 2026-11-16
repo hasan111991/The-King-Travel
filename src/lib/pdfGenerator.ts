@@ -1,8 +1,11 @@
-import { jsPDF } from 'jspdf';
 import type { BookingRecord, PaymentRecord, UserProfile } from '../types/travel';
 import { formatMoney } from './defaultData';
 
-export function downloadBookingConfirmationPdf(booking: BookingRecord, agencyName = 'The King Travel') {
+export async function downloadBookingConfirmationPdf(
+  booking: BookingRecord,
+  agencyName = 'The King Travel'
+) {
+  const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const marginX = 48;
   let y = 52;
@@ -166,13 +169,14 @@ export function downloadCsvReport(filename: string, headers: string[], rows: Arr
   URL.revokeObjectURL(url);
 }
 
-export function downloadAdminPdfReport(
+export async function downloadAdminPdfReport(
   title: string,
   subtitle: string,
   headers: string[],
   rows: Array<Array<string | number>>,
   filename: string
 ) {
+  const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'landscape' });
   doc.setFillColor(15, 41, 66);
   doc.rect(0, 0, 842, 70, 'F');

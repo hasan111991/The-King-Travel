@@ -44,9 +44,14 @@ npm run start
 For Firebase Hosting or Netlify with full-stack Express routes, deploy the Express server (`server.ts`) on Cloud Run / Node host and point `/api/*`, `/sitemap.xml`, and `/robots.txt` rewrites to it.
 
 ## 6. GitHub Pages Deployment
-1. Push your repository to `main` (or `master`).
-2. Open your GitHub repository **Settings → Pages → Build and deployment → Source** and select **GitHub Actions**.
-   - Do **not** select *Deploy from a branch (`/`)* on the source repository, because browsers cannot run unbuilt `.tsx` files directly.
-   - The included `.github/workflows/deploy.yml` workflow builds `dist/` automatically and deploys it with relative `./assets/` paths and `HashRouter`.
-3. In Firebase Console (**Authentication → Settings → Authorized domains**), add `<your-username>.github.io` (and any custom domain) so Google Sign-In works on the deployed URL.
+All three GitHub Pages source options are supported out of the box:
+1. **Option A — Deploy from branch `main` → `/docs` (Recommended if not using Actions)**:
+   - Pre-compiled production HTML, CSS, JS, and assets are located in `docs/`.
+   - Rebuild `docs/` anytime after edits with `npm run build:gh`.
+2. **Option B — Deploy from branch `main` → `/ (root)`**:
+   - Root `index.html` automatically redirects static hosts to `./docs/` so visitors never see a blank page.
+3. **Option C — GitHub Actions**:
+   - Open **Settings → Pages → Source** and select **GitHub Actions**. `.github/workflows/deploy.yml` builds `dist/` with relative `./assets/` paths and `HashRouter`.
+4. **Firebase Auth Domain**:
+   - In Firebase Console (**Authentication → Settings → Authorized domains**), add `<your-username>.github.io` (and any custom domain) so Google Sign-In works on your GitHub Pages URL.
 

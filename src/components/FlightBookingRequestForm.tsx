@@ -19,6 +19,7 @@ import { useAgency } from '../context/AgencyContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { db, generateId, handleFirestoreError, OperationType } from '../lib/firebase';
+import { searchAirportsFallback } from '../lib/staticFallbacks';
 import type {
   CabinClass,
   FlightRequestRecord,
@@ -159,7 +160,8 @@ export function FlightBookingRequestForm({
     setActiveField(fieldKey);
     try {
       const res = await fetch(`/api/flights/airports?q=${encodeURIComponent(q)}`);
-      if (res.ok) {
+      const isJson = Boolean(res.headers.get('content-type')?.includes('application/json'));
+      if (res.ok && isJson) {
         const data = (await res.json()) as { airports: AirportOption[] };
         setSuggestions(data.airports);
         return;
@@ -167,17 +169,7 @@ export function FlightBookingRequestForm({
     } catch {
       // fallback below
     }
-    const lower = q.trim().toLowerCase();
-    setSuggestions(
-      FALLBACK_AIRPORTS.filter(
-        (a) =>
-          !lower ||
-          a.code.toLowerCase().includes(lower) ||
-          a.city.toLowerCase().includes(lower) ||
-          a.country.toLowerCase().includes(lower) ||
-          a.name.toLowerCase().includes(lower)
-      ).slice(0, 12)
-    );
+    setSuggestions(searchAirportsFallback(q).slice(0, 12));
   };
 
   const applyAirportChoice = (fieldKey: string, airport: AirportOption) => {
@@ -384,7 +376,8 @@ export function FlightBookingRequestForm({
             agencyEmail: settings.contactEmail,
           }),
         });
-        if (notifyRes.ok) {
+        const isJson = Boolean(notifyRes.headers.get('content-type')?.includes('application/json'));
+        if (notifyRes.ok && isJson) {
           const notifyJson = await notifyRes.json();
           if (notifyJson?.agencyNotification?.emailSent) {
             setEmailDispatchNote(`Email alert delivered to agency desk (${notifyJson.targetAgencyEmail}).`);
@@ -393,6 +386,10 @@ export function FlightBookingRequestForm({
               `Request saved for agency desk (${notifyJson?.targetAgencyEmail || settings.contactEmail}). Live email relay will deliver automatically when RESEND_API_KEY is active.`
             );
           }
+        } else {
+          setEmailDispatchNote(
+            `Saved to agency dashboard (${settings.contactEmail}) for immediate review.`
+          );
         }
       } catch {
         setEmailDispatchNote('Saved to agency dashboard for immediate review.');

@@ -3,6 +3,7 @@ import App from './App.tsx';
 import './index.css';
 
 const rootElement = document.getElementById('root');
+(window as unknown as { __ktBooted?: boolean }).__ktBooted = true;
 
 if (rootElement) {
   try {

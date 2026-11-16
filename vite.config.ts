@@ -1,15 +1,51 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+
+function stripRawRepoFallbackPlugin(): Plugin {
+  return {
+    name: 'strip-raw-repo-fallback',
+    apply: 'build',
+    transformIndexHtml(html) {
+      return html.replace(
+        /\s*<script id="kt-gh-fallback">[\s\S]*?<\/script>\s*/g,
+        '\n    '
+      );
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
     base: process.env.VITE_BASE_PATH || './',
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), stripRawRepoFallbackPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname, '.'),
+      },
+    },
+    build: {
+      chunkSizeWarningLimit: 700,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (
+              id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/react-router')
+            ) {
+              return 'react-vendor';
+            }
+            if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) {
+              return 'firebase-vendor';
+            }
+            if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
+              return 'charts-vendor';
+            }
+            return undefined;
+          },
+        },
       },
     },
     server: {

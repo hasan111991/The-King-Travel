@@ -4,6 +4,7 @@ import { AlertTriangle, Briefcase, Clock, Filter, Info, Plane, ShieldCheck } fro
 import { FlightSearchWidget } from '../components/FlightSearchWidget';
 import { useAgency } from '../context/AgencyContext';
 import { convertMoney, formatMoney } from '../lib/defaultData';
+import { searchFlightsStaticFallback } from '../lib/staticFallbacks';
 import type { CabinClass, FlightOfferResult, TripType } from '../types/travel';
 
 type SortOption = 'recommended' | 'cheapest' | 'fastest' | 'earliest';
@@ -74,27 +75,41 @@ export function FlightsPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/flights/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tripType,
-            originCode: fromCode,
-            destinationCode: toCode,
-            departureDate: depDate,
-            returnDate: tripType === 'round-trip' ? retDate : undefined,
-            adults,
-            children,
-            infants,
-            cabinClass: cabinParam,
-            currency,
-            mode: settings.operatingMode,
-          }),
-        });
-        const isJson = res.headers.get('content-type')?.includes('application/json');
-        const data = isJson ? await res.json() : { offers: [], notice: '', hasLiveSupplier: false };
-        if (res.ok === false && isJson) {
-          throw new Error(data.error || 'Flight search failed');
+        const searchPayload = {
+          tripType,
+          originCode: fromCode,
+          destinationCode: toCode,
+          departureDate: depDate,
+          returnDate: tripType === 'round-trip' ? retDate : undefined,
+          adults,
+          children,
+          infants,
+          cabinClass: cabinParam,
+          currency,
+          mode: settings.operatingMode,
+        };
+
+        let data: { offers: FlightOfferResult[]; notice: string; hasLiveSupplier: boolean; error?: string };
+        try {
+          const res = await fetch('/api/flights/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(searchPayload),
+          });
+          const isJson = Boolean(res.headers.get('content-type')?.includes('application/json'));
+          if (isJson) {
+            data = await res.json();
+            if (!res.ok) {
+              throw new Error(data.error || 'Flight search failed');
+            }
+          } else {
+            data = await searchFlightsStaticFallback(searchPayload);
+          }
+        } catch (fetchErr) {
+          if (fetchErr instanceof Error && fetchErr.message.includes('Flight search failed')) {
+            throw fetchErr;
+          }
+          data = await searchFlightsStaticFallback(searchPayload);
         }
         if (!active) return;
 

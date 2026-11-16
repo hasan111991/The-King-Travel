@@ -122,7 +122,9 @@ export function AdminOverviewTab({
           <h2 className="text-sm font-bold text-[#102A43]">Platform Operating Mode & Supplier APIs</h2>
           <p className="text-xs text-[#486581] mt-1">
             Suppliers:{' '}
-            {supplierStatus.map((s) => `${s.name} (${s.configured ? 'Configured' : 'Keys Missing'})`).join(' · ')}
+            {supplierStatus.length > 0
+              ? supplierStatus.map((s) => `${s.name} (${s.configured ? 'Configured' : 'Keys Missing'})`).join(' · ')
+              : 'Manual Agency Quotation Desk Active (Static Web Hosting)'}
           </p>
         </div>
 

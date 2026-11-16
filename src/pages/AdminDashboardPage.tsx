@@ -92,8 +92,13 @@ export function AdminDashboardPage() {
 
   useEffect(() => {
     fetch('/api/integrations/status')
-      .then((r) => r.json())
-      .then((d) => setSupplierStatus(d.suppliers || []))
+      .then((r) => {
+        if (!r.ok || !r.headers.get('content-type')?.includes('application/json')) return null;
+        return r.json();
+      })
+      .then((d) => {
+        if (d?.suppliers) setSupplierStatus(d.suppliers);
+      })
       .catch(() => {});
   }, []);
 

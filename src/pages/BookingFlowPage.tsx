@@ -21,6 +21,7 @@ import { useToast } from '../context/ToastContext';
 import { formatMoney } from '../lib/defaultData';
 import { db, generateId, handleFirestoreError, OperationType } from '../lib/firebase';
 import { downloadBookingConfirmationPdf } from '../lib/pdfGenerator';
+import { revalidateOfferStaticFallback } from '../lib/staticFallbacks';
 import type {
   BookingRecord,
   FlightOfferResult,
@@ -161,25 +162,41 @@ export function BookingFlowPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ offer }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Revalidation error');
+      const isJson = Boolean(res.headers.get('content-type')?.includes('application/json'));
+      if (res.ok && isJson) {
+        const data = await res.json();
+        setRevalidation({
+          loading: false,
+          available: data.available,
+          estimatedPrice: data.estimatedPrice,
+          confirmedPrice: data.confirmedPrice,
+          priceChanged: data.priceChanged,
+          message: data.message,
+        });
+        return;
+      }
+      if (!res.ok && isJson) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Revalidation error');
+      }
+      const fallback = await revalidateOfferStaticFallback(offer);
       setRevalidation({
         loading: false,
-        available: data.available,
-        estimatedPrice: data.estimatedPrice,
-        confirmedPrice: data.confirmedPrice,
-        priceChanged: data.priceChanged,
-        message: data.message,
+        available: fallback.available,
+        estimatedPrice: fallback.estimatedPrice,
+        confirmedPrice: fallback.confirmedPrice,
+        priceChanged: fallback.priceChanged,
+        message: fallback.message,
       });
-    } catch (err) {
+    } catch {
+      const fallback = await revalidateOfferStaticFallback(offer);
       setRevalidation({
         loading: false,
-        available: true,
-        estimatedPrice: offer.totalPrice,
-        confirmedPrice: offer.totalPrice,
-        priceChanged: false,
-        message:
-          err instanceof Error ? err.message : 'Unable to reach supplier; proceeding with estimated quotation.',
+        available: fallback.available,
+        estimatedPrice: fallback.estimatedPrice,
+        confirmedPrice: fallback.confirmedPrice,
+        priceChanged: fallback.priceChanged,
+        message: fallback.message,
       });
     }
   };
@@ -347,26 +364,43 @@ export function BookingFlowPage() {
       let finalBookingStatus: BookingRecord['bookingStatus'] =
         offer.totalPrice === 0 ? 'New Request' : 'Pending Payment';
 
-      // 2. If online gateway was chosen, initiate server-side checkout session
+      // 2. If online gateway was chosen, initiate server-side checkout session when backend API is present
       if (modeType === 'online_gateway') {
-        const gwRes = await fetch('/api/payments/gateway-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookingId,
-            bookingReference,
-            amount: activeTotal,
-            currency: offer.currency,
-            customerEmail: contactEmail.trim(),
-            gateway: 'card_stripe',
-          }),
-        });
-        const gwData = await gwRes.json();
-        if (gwData.configured && gwData.checkoutUrl) {
-          window.location.href = gwData.checkoutUrl;
-          return;
+        try {
+          const gwRes = await fetch('/api/payments/gateway-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookingId,
+              bookingReference,
+              amount: activeTotal,
+              currency: offer.currency,
+              customerEmail: contactEmail.trim(),
+              gateway: 'card_stripe',
+            }),
+          });
+          const isJson = Boolean(gwRes.headers.get('content-type')?.includes('application/json'));
+          if (gwRes.ok && isJson) {
+            const gwData = await gwRes.json();
+            if (gwData.configured && gwData.checkoutUrl) {
+              window.location.href = gwData.checkoutUrl;
+              return;
+            }
+            showToast('Gateway Not Configured', gwData.message || 'Booking saved for manual verification.', 'info');
+          } else {
+            showToast(
+              'Manual Payment Processing',
+              'Direct card gateway is not connected on static hosting. Your booking was saved — upload transfer proof or pay via our travel desk.',
+              'info'
+            );
+          }
+        } catch {
+          showToast(
+            'Manual Payment Processing',
+            'Your booking request is saved. Upload your transfer receipt from My Bookings to proceed.',
+            'info'
+          );
         }
-        showToast('Gateway Not Configured', gwData.message, 'info');
       }
 
       // 3. If customer attached a manual receipt, create /payments/{paymentId} with verificationStatus='pending'

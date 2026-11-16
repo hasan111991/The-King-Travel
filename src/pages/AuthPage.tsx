@@ -38,9 +38,17 @@ export function AuthPage({ mode = 'login' }: { mode?: 'login' | 'register' }) {
       await loginWithGoogle();
       showToast('Signed In', 'Welcome to The King Travel.', 'success');
       navigate(redirectTo, { replace: true });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Google sign-in was cancelled or blocked.';
-      setAuthError(msg);
+    } catch (err: any) {
+      const code = err?.code || '';
+      if (code === 'auth/unauthorized-domain') {
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+        setAuthError(
+          `Domain "${host}" is not yet authorized in Firebase Authentication. Add "${host}" in Firebase Console > Authentication > Settings > Authorized domains to enable Google Sign-In here.`
+        );
+      } else {
+        const msg = err instanceof Error ? err.message : 'Google sign-in was cancelled or blocked.';
+        setAuthError(msg);
+      }
     } finally {
       setBusy(false);
     }
