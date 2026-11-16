@@ -33,7 +33,7 @@ export interface FlightSearchParams {
   infants: number;
   cabinClass: CabinClass;
   currency: string;
-  mode: 'demo' | 'live';
+  mode: 'live';
 }
 
 export interface FareBreakdown {
@@ -46,9 +46,9 @@ export interface FareBreakdown {
 
 export interface FlightOfferResult {
   id: string;
-  provider: 'amadeus' | 'duffel' | 'demo' | 'manual_offer';
+  provider: 'amadeus' | 'duffel' | 'manual_offer';
   isDemo: boolean;
-  pricingType: 'demo_sample' | 'manual_quotation' | 'confirmed_supplier';
+  pricingType: 'manual_quotation' | 'confirmed_supplier';
   airline: string;
   airlineCode: string;
   flightNumber: string;
@@ -96,7 +96,7 @@ export interface SupplierStatus {
 }
 
 export interface FlightSupplierProvider {
-  readonly id: 'amadeus' | 'duffel' | 'demo';
+  readonly id: 'amadeus' | 'duffel';
   readonly name: string;
   isConfigured(): boolean;
   searchFlights(params: FlightSearchParams): Promise<FlightOfferResult[]>;

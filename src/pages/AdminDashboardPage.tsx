@@ -54,6 +54,7 @@ import {
   DEMO_ADMIN_UID,
 } from '../lib/demoAdminData';
 import { db, generateId } from '../lib/firebase';
+import { formatFirebaseSaveError } from '../lib/settingsUtils';
 import type {
   AdminRoleRecord,
   AuditLogItem,
@@ -265,17 +266,18 @@ export function AdminDashboardPage() {
         operatingMode: mode,
       });
       const batch = writeBatch(db);
+      batch.set(doc(db, 'siteSettings', 'general'), payload);
       batch.set(doc(db, 'settings', 'public'), payload);
       batch.set(doc(db, 'websiteSettings', 'public'), payload);
       await batch.commit();
-      await logAudit(`Switched operating mode to ${mode}`, 'settings', 'public', mode);
+      try {
+        await logAudit(`Switched operating mode to ${mode}`, 'siteSettings', 'general', mode);
+      } catch (auditErr) {
+        console.warn('Audit log failed:', auditErr);
+      }
       showToast('Operating Mode Updated', `Platform is now in ${mode.toUpperCase()} mode.`, 'success');
     } catch (err) {
-      showToast(
-        'Update Failed',
-        err instanceof Error ? err.message : 'Unable to switch operating mode.',
-        'error'
-      );
+      showToast('Update Failed', formatFirebaseSaveError(err).message, 'error');
     }
   };
 
@@ -682,9 +684,22 @@ export function AdminDashboardPage() {
                   );
                   return;
                 }
-                await seedDefaultCatalog();
-                await logAudit('Seeded default catalog', 'settings', 'public', 'Initialized destinations, offers, testimonials');
-                showToast('Catalog Initialized', 'Default agency catalog written to Firestore.', 'success');
+                try {
+                  await seedDefaultCatalog();
+                  try {
+                    await logAudit(
+                      'Seeded default catalog',
+                      'siteSettings',
+                      'general',
+                      'Initialized destinations, offers, testimonials'
+                    );
+                  } catch (auditErr) {
+                    console.warn('Audit log failed:', auditErr);
+                  }
+                  showToast('Catalog Initialized', 'Default agency catalog written to Firestore.', 'success');
+                } catch (err) {
+                  showToast('Catalog Initialization Failed', formatFirebaseSaveError(err).message, 'error');
+                }
               }}
             />
           )}

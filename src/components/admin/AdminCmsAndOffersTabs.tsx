@@ -1,8 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { deleteDoc, doc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { Plus, Trash2 } from 'lucide-react';
-import { formatMoney } from '../../lib/defaultData';
-import { db, generateId, handleFirestoreError, OperationType } from '../../lib/firebase';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
+import { AlertCircle, CheckCircle2, Image as ImageIcon, Loader2, Plus, Trash2, Upload } from 'lucide-react';
+import { DEFAULT_AGENCY_SETTINGS, formatMoney } from '../../lib/defaultData';
+import { auth, db, generateId, handleFirestoreError, OperationType, storage } from '../../lib/firebase';
+import {
+  buildSanitizedSettingsPayload,
+  formatFirebaseSaveError,
+  mergeAgencySettings,
+  validateSettingsForm,
+} from '../../lib/settingsUtils';
 import type {
   AgencySettings,
   CabinClass,
@@ -13,29 +20,7 @@ import type {
   TravelPackageItem,
 } from '../../types/travel';
 
-export function buildSanitizedSettingsPayload(s: AgencySettings) {
-  return {
-    agencyName: s.agencyName,
-    tagline: s.tagline || '',
-    executiveName: s.executiveName || '',
-    executiveRole: s.executiveRole || '',
-    operatingMode: s.operatingMode,
-    defaultCurrency: s.defaultCurrency || 'USD',
-    whatsappNumber: s.whatsappNumber || '',
-    contactEmail: s.contactEmail || '',
-    contactPhone: s.contactPhone || '',
-    secondaryPhone: s.secondaryPhone || '',
-    officeAddress: s.officeAddress || '',
-    socialLinks: s.socialLinks || {},
-    paymentMethods: s.paymentMethods,
-    bankDetails: s.bankDetails,
-    faqs: Array.isArray(s.faqs) ? s.faqs.slice(0, 30) : [],
-    legalPages: s.legalPages,
-    heroTitle: s.heroTitle || '',
-    heroSubtitle: s.heroSubtitle || '',
-    updatedAt: serverTimestamp(),
-  };
-}
+export { buildSanitizedSettingsPayload };
 
 interface AdminOffersTabProps {
   offers: ManualFlightOffer[];
@@ -100,7 +85,8 @@ export function AdminFlightOffersTab({ offers, isDemoSandbox = false, onLogAudit
       try {
         handleFirestoreError(err, OperationType.CREATE, `flightOffers/${offerId}`);
       } catch {
-        onToast('Error', 'Unable to save flight offer.', 'error');
+        const formatted = formatFirebaseSaveError(err);
+        onToast('Error', formatted.message, 'error');
       }
     }
   };
@@ -122,7 +108,8 @@ export function AdminFlightOffersTab({ offers, isDemoSandbox = false, onLogAudit
       try {
         handleFirestoreError(err, OperationType.DELETE, `flightOffers/${offerId}`);
       } catch {
-        onToast('Error', 'Could not delete offer.', 'error');
+        const formatted = formatFirebaseSaveError(err);
+        onToast('Error', formatted.message, 'error');
       }
     }
   };
@@ -223,12 +210,29 @@ export function AdminCmsAndSettingsTab({
   onLogAudit,
   onToast,
 }: AdminCmsTabProps) {
-  const [form, setForm] = useState<AgencySettings>(settings);
+  const [form, setForm] = useState<AgencySettings>(() =>
+    mergeAgencySettings(DEFAULT_AGENCY_SETTINGS, settings)
+  );
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [uploadingAsset, setUploadingAsset] = useState<'logo' | 'hero' | null>(null);
+  const [saveFeedback, setSaveFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+    savedAt?: string;
+  } | null>(null);
 
   useEffect(() => {
-    setForm(settings);
-  }, [settings]);
+    if (!hasUnsavedChanges && !savingSettings) {
+      setForm(mergeAgencySettings(DEFAULT_AGENCY_SETTINGS, settings));
+    }
+  }, [settings, hasUnsavedChanges, savingSettings]);
+
+  const updateForm = (updater: (prev: AgencySettings) => AgencySettings) => {
+    setHasUnsavedChanges(true);
+    setSaveFeedback(null);
+    setForm((prev) => updater(prev));
+  };
 
   // Special Offer quick create
   const [offerTitle, setOfferTitle] = useState('');
@@ -270,24 +274,112 @@ export function AdminCmsAndSettingsTab({
     return true;
   };
 
+  const handleImageUpload = async (
+    target: 'logo' | 'hero',
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (guardDemoCms(`Uploading ${target === 'logo' ? 'logo' : 'hero banner'}`)) return;
+
+    if (!file.type.startsWith('image/')) {
+      onToast('Invalid File', 'Please select a PNG, JPG, or WebP image file.', 'error');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      onToast('File Too Large', 'Image must be 5 MB or smaller.', 'error');
+      return;
+    }
+
+    setUploadingAsset(target);
+    try {
+      const safeExt = (file.name.split('.').pop() || 'png').replace(/[^a-zA-Z0-9]/g, '').slice(0, 6) || 'png';
+      const fileRef = storageRef(storage, `website-images/${target}_${Date.now()}.${safeExt}`);
+      await uploadBytes(fileRef, file, { contentType: file.type });
+      const downloadUrl = await getDownloadURL(fileRef);
+      updateForm((prev) =>
+        target === 'logo'
+          ? { ...prev, logoUrl: downloadUrl }
+          : { ...prev, heroBannerUrl: downloadUrl }
+      );
+      onToast(
+        'Image Uploaded',
+        'Click "Save All Settings" to publish this image to your live website.',
+        'success'
+      );
+    } catch (err) {
+      const formatted = formatFirebaseSaveError(err);
+      setSaveFeedback({
+        type: 'error',
+        message: `Image upload failed (${formatted.code}). You can still paste an external HTTPS image URL directly in the field below.`,
+      });
+      onToast('Upload Failed', 'Paste an HTTPS image URL or check Firebase Storage configuration.', 'error');
+    } finally {
+      setUploadingAsset(null);
+    }
+  };
+
   const saveAgencySettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingSettings) return;
     if (guardDemoCms('Publishing agency settings')) return;
+
+    setSaveFeedback(null);
+
+    if (!auth.currentUser) {
+      const msg = 'Your Firebase Admin session is not active. Please sign in with your verified Google Admin account.';
+      setSaveFeedback({ type: 'error', message: msg });
+      onToast('Authentication Required', msg, 'error');
+      return;
+    }
+
+    const validationError = validateSettingsForm(form);
+    if (validationError) {
+      setSaveFeedback({ type: 'error', message: validationError });
+      onToast('Validation Error', validationError, 'error');
+      return;
+    }
+
     setSavingSettings(true);
     try {
       const payload = buildSanitizedSettingsPayload(form);
       const batch = writeBatch(db);
+      batch.set(doc(db, 'siteSettings', 'general'), payload);
       batch.set(doc(db, 'settings', 'public'), payload);
       batch.set(doc(db, 'websiteSettings', 'public'), payload);
       await batch.commit();
-      await onLogAudit('Updated agency settings & legal pages', 'settings', 'public', form.agencyName);
-      onToast('Settings Saved', 'Public website content and payment details updated.', 'success');
+
+      setHasUnsavedChanges(false);
+      setForm((prev) => mergeAgencySettings(DEFAULT_AGENCY_SETTINGS, prev));
+      const savedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setSaveFeedback({
+        type: 'success',
+        message: 'CMS settings saved to Firestore (siteSettings/general) and synchronized across the website.',
+        savedAt: savedTime,
+      });
+      onToast('Settings Saved', 'Public website branding, SEO, and contact settings updated.', 'success');
+
+      try {
+        await onLogAudit(
+          'Updated agency CMS settings & legal pages',
+          'siteSettings',
+          'general',
+          payload.agencyName
+        );
+      } catch (auditErr) {
+        console.warn('Audit log after settings save failed:', auditErr);
+      }
     } catch (err) {
       try {
-        handleFirestoreError(err, OperationType.WRITE, 'settings/public');
+        handleFirestoreError(err, OperationType.WRITE, 'siteSettings/general');
       } catch {
-        onToast('Error', 'Unable to save settings.', 'error');
+        // Telemetry JSON logged by handleFirestoreError; display clear user error below
       }
+      const formatted = formatFirebaseSaveError(err);
+      setSaveFeedback({ type: 'error', message: formatted.message });
+      onToast('Save Failed', formatted.message, 'error');
     } finally {
       setSavingSettings(false);
     }
@@ -313,7 +405,10 @@ export function AdminCmsAndSettingsTab({
       setOfferDesc('');
       onToast('Offer Published', 'Special offer added to homepage.', 'success');
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `offers/${offerId}`);
+      try {
+        handleFirestoreError(err, OperationType.CREATE, `offers/${offerId}`);
+      } catch {}
+      onToast('Error', formatFirebaseSaveError(err).message, 'error');
     }
   };
 
@@ -337,7 +432,10 @@ export function AdminCmsAndSettingsTab({
       setCustQuote('');
       onToast('Testimonial Published', 'Review added.', 'success');
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `testimonials/${testimonialId}`);
+      try {
+        handleFirestoreError(err, OperationType.CREATE, `testimonials/${testimonialId}`);
+      } catch {}
+      onToast('Error', formatFirebaseSaveError(err).message, 'error');
     }
   };
 
@@ -372,7 +470,10 @@ export function AdminCmsAndSettingsTab({
       setDestDesc('');
       onToast('Destination Added', `${destName} added to destinations.`, 'success');
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `destinations/${destinationId}`);
+      try {
+        handleFirestoreError(err, OperationType.CREATE, `destinations/${destinationId}`);
+      } catch {}
+      onToast('Error', formatFirebaseSaveError(err).message, 'error');
     }
   };
 
@@ -414,9 +515,8 @@ export function AdminCmsAndSettingsTab({
     } catch (err) {
       try {
         handleFirestoreError(err, OperationType.CREATE, `travelPackages/${packageId}`);
-      } catch {
-        onToast('Error', 'Unable to save travel package.', 'error');
-      }
+      } catch {}
+      onToast('Error', formatFirebaseSaveError(err).message, 'error');
     }
   };
 
@@ -432,118 +532,513 @@ export function AdminCmsAndSettingsTab({
     } catch (err) {
       try {
         handleFirestoreError(err, OperationType.UPDATE, `travelPackages/${pkg.packageId}`);
-      } catch {
-        onToast('Error', 'Unable to update package status.', 'error');
-      }
+      } catch {}
+      onToast('Error', formatFirebaseSaveError(err).message, 'error');
     }
   };
 
+  const logoPreviewSrc = form.logoUrl?.trim() || `${import.meta.env.BASE_URL}official-logo.png`;
+
   return (
     <div className="space-y-8">
-      {/* Business Settings, Contact, Bank Details & Legal Pages */}
+      {/* Website CMS Settings, Branding, Hero Banner, SEO, Contacts, Payments & Legal */}
       <form onSubmit={saveAgencySettings} className="bg-white border border-[#D9E2EC] rounded-xl p-6 space-y-6">
-        <div className="flex items-center justify-between border-b border-[#E6ECF2] pb-3">
-          <h2 className="text-base font-bold text-[#0F2942]">Business Settings, Payments & Legal CMS</h2>
-          <button type="submit" disabled={savingSettings} className="px-5 py-2 rounded-lg bg-[#FD8F1C] hover:bg-[#E07A0E] text-white text-xs font-bold">
-            {savingSettings ? 'Saving...' : 'Save All Settings'}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E6ECF2] pb-3">
+          <div>
+            <h2 className="text-base font-bold text-[#0F2942]">
+              Website CMS Settings, Branding, SEO & Legal
+            </h2>
+            <p className="text-xs text-[#627D98] mt-0.5">
+              Changes save to Firestore (<code className="font-mono">siteSettings/general</code>) and update the live site immediately.
+            </p>
+          </div>
+          <button
+            type="submit"
+            disabled={savingSettings}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#FD8F1C] hover:bg-[#E07A0E] disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors"
+          >
+            {savingSettings && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {savingSettings ? 'Saving Settings...' : 'Save All Settings'}
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-          <div>
-            <label className="block font-semibold text-[#486581] mb-1">Hero Headline</label>
-            <input value={form.heroTitle} onChange={(e) => setForm({ ...form, heroTitle: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
+        {saveFeedback && (
+          <div
+            role={saveFeedback.type === 'error' ? 'alert' : 'status'}
+            className={`rounded-xl border px-4 py-3 text-xs flex items-start gap-2.5 ${
+              saveFeedback.type === 'error'
+                ? 'bg-red-50 border-red-200 text-red-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            }`}
+          >
+            {saveFeedback.type === 'error' ? (
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1">
+              <p className="font-semibold">{saveFeedback.message}</p>
+              {saveFeedback.savedAt && (
+                <p className="text-[11px] opacity-80 mt-0.5">Last saved at {saveFeedback.savedAt}</p>
+              )}
+            </div>
           </div>
-          <div>
-            <label className="block font-semibold text-[#486581] mb-1">Executive / CEO Name</label>
-            <input value={form.executiveName || ''} onChange={(e) => setForm({ ...form, executiveName: e.target.value })} placeholder="M Kamal Siddiqui" className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-          </div>
-          <div>
-            <label className="block font-semibold text-[#486581] mb-1">Executive Title</label>
-            <input value={form.executiveRole || ''} onChange={(e) => setForm({ ...form, executiveRole: e.target.value })} placeholder="CEO of THE KING TRAVEL" className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-          </div>
-          <div>
-            <label className="block font-semibold text-[#486581] mb-1">WhatsApp Number (digits with country code)</label>
-            <input value={form.whatsappNumber} onChange={(e) => setForm({ ...form, whatsappNumber: e.target.value })} placeholder="15716209414" className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-          </div>
-          <div>
-            <label className="block font-semibold text-[#486581] mb-1">Contact Email</label>
-            <input value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-          </div>
-          <div>
-            <label className="block font-semibold text-[#486581] mb-1">Primary Phone</label>
-            <input value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-          </div>
-          <div>
-            <label className="block font-semibold text-[#486581] mb-1">Secondary Phone</label>
-            <input value={form.secondaryPhone || ''} onChange={(e) => setForm({ ...form, secondaryPhone: e.target.value })} placeholder="+1 972 815 7405" className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block font-semibold text-[#486581] mb-1">Office Address</label>
-            <input value={form.officeAddress} onChange={(e) => setForm({ ...form, officeAddress: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
+        )}
+
+        {/* Section 1: Brand Identity & Logo */}
+        <div className="space-y-3 text-xs">
+          <h3 className="font-bold text-[#0F2942]">Brand Identity & Website Logo</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Website / Agency Name *</label>
+              <input
+                required
+                maxLength={120}
+                value={form.agencyName}
+                onChange={(e) => updateForm((p) => ({ ...p, agencyName: e.target.value }))}
+                placeholder="The King Travel"
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Official Tagline</label>
+              <input
+                maxLength={300}
+                value={form.tagline}
+                onChange={(e) => updateForm((p) => ({ ...p, tagline: e.target.value }))}
+                placeholder="Your Ultimate Travel Partner!"
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Default Currency</label>
+              <select
+                value={form.defaultCurrency}
+                onChange={(e) => updateForm((p) => ({ ...p, defaultCurrency: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              >
+                <option value="USD">USD ($)</option>
+                <option value="PKR">PKR</option>
+                <option value="AED">AED</option>
+                <option value="SAR">SAR</option>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Executive / CEO Name</label>
+              <input
+                maxLength={120}
+                value={form.executiveName || ''}
+                onChange={(e) => updateForm((p) => ({ ...p, executiveName: e.target.value }))}
+                placeholder="M Kamal Siddiqui"
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Executive Title</label>
+              <input
+                maxLength={120}
+                value={form.executiveRole || ''}
+                onChange={(e) => updateForm((p) => ({ ...p, executiveRole: e.target.value }))}
+                placeholder="CEO of THE KING TRAVEL"
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Website Logo URL (optional)</label>
+              <div className="flex gap-2 items-center">
+                <input
+                  maxLength={1000}
+                  value={form.logoUrl || ''}
+                  onChange={(e) => updateForm((p) => ({ ...p, logoUrl: e.target.value }))}
+                  placeholder="https://... or leave blank for official logo"
+                  className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-[#D9E2EC]"
+                />
+                <label className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border border-[#D9E2EC] bg-[#F7F9FC] hover:bg-[#E6ECF2] text-[#0F2942] font-semibold cursor-pointer shrink-0">
+                  {uploadingAsset === 'logo' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5" />
+                  )}
+                  <span>Upload</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingAsset !== null}
+                    onChange={(e) => handleImageUpload('logo', e)}
+                  />
+                </label>
+              </div>
+              <div className="mt-2 flex items-center gap-3">
+                <img
+                  src={logoPreviewSrc}
+                  alt="Logo preview"
+                  className="h-8 w-auto rounded border border-[#E6ECF2] bg-white px-1.5 py-0.5 object-contain"
+                />
+                {form.logoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => updateForm((p) => ({ ...p, logoUrl: '' }))}
+                    className="text-[11px] text-[#627D98] hover:text-[#0F2942] underline"
+                  >
+                    Reset to Default Logo
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
+        {/* Section 2: Homepage Hero Content & Banner */}
+        <div className="pt-4 border-t border-[#E6ECF2] space-y-3 text-xs">
+          <h3 className="font-bold text-[#0F2942]">Homepage Hero Content & Banner</h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Hero Headline</label>
+              <input
+                maxLength={200}
+                value={form.heroTitle}
+                onChange={(e) => updateForm((p) => ({ ...p, heroTitle: e.target.value }))}
+                placeholder="Discover the World with The King Travel"
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Hero Banner Image URL (optional)</label>
+              <div className="flex gap-2 items-center">
+                <input
+                  maxLength={1000}
+                  value={form.heroBannerUrl || ''}
+                  onChange={(e) => updateForm((p) => ({ ...p, heroBannerUrl: e.target.value }))}
+                  placeholder="https://... or leave blank for default skyline banner"
+                  className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-[#D9E2EC]"
+                />
+                <label className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border border-[#D9E2EC] bg-[#F7F9FC] hover:bg-[#E6ECF2] text-[#0F2942] font-semibold cursor-pointer shrink-0">
+                  {uploadingAsset === 'hero' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <ImageIcon className="w-3.5 h-3.5" />
+                  )}
+                  <span>Upload</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={uploadingAsset !== null}
+                    onChange={(e) => handleImageUpload('hero', e)}
+                  />
+                </label>
+              </div>
+              {form.heroBannerUrl && (
+                <div className="mt-2 flex items-center gap-3">
+                  <img
+                    src={form.heroBannerUrl}
+                    alt="Hero banner preview"
+                    className="h-12 w-24 rounded object-cover border border-[#D9E2EC]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateForm((p) => ({ ...p, heroBannerUrl: '' }))}
+                    className="text-[11px] text-[#627D98] hover:text-[#0F2942] underline"
+                  >
+                    Reset to Default Banner
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="lg:col-span-2">
+              <label className="block font-semibold text-[#486581] mb-1">Hero Subtitle / Homepage Intro</label>
+              <textarea
+                rows={2}
+                maxLength={600}
+                value={form.heroSubtitle}
+                onChange={(e) => updateForm((p) => ({ ...p, heroSubtitle: e.target.value }))}
+                placeholder="Your journey deserves exceptional service. Discover destinations, explore flight deals and travel with confidence."
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Contact Details */}
+        <div className="pt-4 border-t border-[#E6ECF2] space-y-3 text-xs">
+          <h3 className="font-bold text-[#0F2942]">Business Contact Information</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Contact Email</label>
+              <input
+                type="email"
+                maxLength={200}
+                value={form.contactEmail}
+                onChange={(e) => updateForm((p) => ({ ...p, contactEmail: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Primary Phone</label>
+              <input
+                maxLength={40}
+                value={form.contactPhone}
+                onChange={(e) => updateForm((p) => ({ ...p, contactPhone: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">Secondary Phone</label>
+              <input
+                maxLength={40}
+                value={form.secondaryPhone || ''}
+                onChange={(e) => updateForm((p) => ({ ...p, secondaryPhone: e.target.value }))}
+                placeholder="+1 972 815 7405"
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">WhatsApp Number (with country code)</label>
+              <input
+                maxLength={40}
+                value={form.whatsappNumber}
+                onChange={(e) => updateForm((p) => ({ ...p, whatsappNumber: e.target.value }))}
+                placeholder="+1 571 620 9414"
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block font-semibold text-[#486581] mb-1">Office Address</label>
+              <input
+                maxLength={300}
+                value={form.officeAddress}
+                onChange={(e) => updateForm((p) => ({ ...p, officeAddress: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 4: Official Social Media Links */}
         <div className="pt-4 border-t border-[#E6ECF2] space-y-3 text-xs">
           <h3 className="font-bold text-[#0F2942]">Official Social Media Links</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <input
               placeholder="Facebook URL"
               value={form.socialLinks?.facebook || ''}
-              onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, facebook: e.target.value } })}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, socialLinks: { ...p.socialLinks, facebook: e.target.value } }))
+              }
               className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
             />
             <input
               placeholder="YouTube URL"
               value={form.socialLinks?.youtube || ''}
-              onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, youtube: e.target.value } })}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, socialLinks: { ...p.socialLinks, youtube: e.target.value } }))
+              }
               className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
             />
             <input
               placeholder="Instagram URL"
               value={form.socialLinks?.instagram || ''}
-              onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, instagram: e.target.value } })}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, socialLinks: { ...p.socialLinks, instagram: e.target.value } }))
+              }
               className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
             />
             <input
               placeholder="TikTok URL"
               value={form.socialLinks?.tiktok || ''}
-              onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, tiktok: e.target.value } })}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, socialLinks: { ...p.socialLinks, tiktok: e.target.value } }))
+              }
+              className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
+            <input
+              placeholder="LinkedIn URL"
+              value={form.socialLinks?.linkedin || ''}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, socialLinks: { ...p.socialLinks, linkedin: e.target.value } }))
+              }
+              className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
+            <input
+              placeholder="X (Twitter) URL"
+              value={form.socialLinks?.x || ''}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, socialLinks: { ...p.socialLinks, x: e.target.value } }))
+              }
               className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
             />
           </div>
         </div>
 
+        {/* Section 5: SEO Settings */}
+        <div className="pt-4 border-t border-[#E6ECF2] space-y-3 text-xs">
+          <h3 className="font-bold text-[#0F2942]">Search Engine & Social Share (SEO)</h3>
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">
+                SEO Meta Title <span className="font-normal text-[#627D98]">({(form.seoTitle || '').length}/160)</span>
+              </label>
+              <input
+                maxLength={160}
+                value={form.seoTitle || ''}
+                onChange={(e) => updateForm((p) => ({ ...p, seoTitle: e.target.value }))}
+                placeholder="The King Travel – Your Ultimate Travel Partner!"
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-[#486581] mb-1">
+                SEO Meta Description <span className="font-normal text-[#627D98]">({(form.seoDescription || '').length}/400)</span>
+              </label>
+              <textarea
+                rows={2}
+                maxLength={400}
+                value={form.seoDescription || ''}
+                onChange={(e) => updateForm((p) => ({ ...p, seoDescription: e.target.value }))}
+                placeholder="Discover the world with The King Travel. Search international & domestic flights, 3 Check Bags deals..."
+                className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 6: Bank Details & Payment Channels */}
         <div className="pt-4 border-t border-[#E6ECF2] space-y-3 text-xs">
           <h3 className="font-bold text-[#0F2942]">Bank Transfer, JazzCash & Easypaisa Instructions</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <input placeholder="Bank Name" value={form.bankDetails.bankName} onChange={(e) => setForm({ ...form, bankDetails: { ...form.bankDetails, bankName: e.target.value } })} className="px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-            <input placeholder="Account Title" value={form.bankDetails.accountTitle} onChange={(e) => setForm({ ...form, bankDetails: { ...form.bankDetails, accountTitle: e.target.value } })} className="px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-            <input placeholder="Account Number" value={form.bankDetails.accountNumber} onChange={(e) => setForm({ ...form, bankDetails: { ...form.bankDetails, accountNumber: e.target.value } })} className="px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-            <input placeholder="IBAN / Routing" value={form.bankDetails.iban} onChange={(e) => setForm({ ...form, bankDetails: { ...form.bankDetails, iban: e.target.value } })} className="px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-            <input placeholder="JazzCash Number" value={form.bankDetails.jazzCashNumber} onChange={(e) => setForm({ ...form, bankDetails: { ...form.bankDetails, jazzCashNumber: e.target.value } })} className="px-3 py-2 rounded-lg border border-[#D9E2EC]" />
-            <input placeholder="Easypaisa Number" value={form.bankDetails.easypaisaNumber} onChange={(e) => setForm({ ...form, bankDetails: { ...form.bankDetails, easypaisaNumber: e.target.value } })} className="px-3 py-2 rounded-lg border border-[#D9E2EC]" />
+            <input
+              placeholder="Bank Name"
+              value={form.bankDetails.bankName}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, bankName: e.target.value } }))
+              }
+              className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
+            <input
+              placeholder="Account Title"
+              value={form.bankDetails.accountTitle}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, accountTitle: e.target.value } }))
+              }
+              className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
+            <input
+              placeholder="Account Number"
+              value={form.bankDetails.accountNumber}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, accountNumber: e.target.value } }))
+              }
+              className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
+            <input
+              placeholder="IBAN / Routing"
+              value={form.bankDetails.iban}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, iban: e.target.value } }))
+              }
+              className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
+            <input
+              placeholder="JazzCash Number"
+              value={form.bankDetails.jazzCashNumber}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, jazzCashNumber: e.target.value } }))
+              }
+              className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
+            <input
+              placeholder="Easypaisa Number"
+              value={form.bankDetails.easypaisaNumber}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, easypaisaNumber: e.target.value } }))
+              }
+              className="px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
           </div>
-          <textarea rows={2} placeholder="Payment Instructions" value={form.bankDetails.instructions} onChange={(e) => setForm({ ...form, bankDetails: { ...form.bankDetails, instructions: e.target.value } })} className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
+          <textarea
+            rows={2}
+            placeholder="Payment Instructions"
+            value={form.bankDetails.instructions}
+            onChange={(e) =>
+              updateForm((p) => ({ ...p, bankDetails: { ...p.bankDetails, instructions: e.target.value } }))
+            }
+            className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+          />
         </div>
 
+        {/* Section 7: Legal Pages */}
         <div className="pt-4 border-t border-[#E6ECF2] grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div>
             <label className="block font-semibold text-[#486581] mb-1">Terms & Conditions</label>
-            <textarea rows={3} value={form.legalPages.terms} onChange={(e) => setForm({ ...form, legalPages: { ...form.legalPages, terms: e.target.value } })} className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
+            <textarea
+              rows={3}
+              value={form.legalPages.terms}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, legalPages: { ...p.legalPages, terms: e.target.value } }))
+              }
+              className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
           </div>
           <div>
             <label className="block font-semibold text-[#486581] mb-1">Privacy Policy</label>
-            <textarea rows={3} value={form.legalPages.privacy} onChange={(e) => setForm({ ...form, legalPages: { ...form.legalPages, privacy: e.target.value } })} className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
+            <textarea
+              rows={3}
+              value={form.legalPages.privacy}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, legalPages: { ...p.legalPages, privacy: e.target.value } }))
+              }
+              className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
           </div>
           <div>
             <label className="block font-semibold text-[#486581] mb-1">Refund Policy</label>
-            <textarea rows={3} value={form.legalPages.refundPolicy} onChange={(e) => setForm({ ...form, legalPages: { ...form.legalPages, refundPolicy: e.target.value } })} className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
+            <textarea
+              rows={3}
+              value={form.legalPages.refundPolicy}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, legalPages: { ...p.legalPages, refundPolicy: e.target.value } }))
+              }
+              className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
           </div>
           <div>
             <label className="block font-semibold text-[#486581] mb-1">Cancellation Policy</label>
-            <textarea rows={3} value={form.legalPages.cancellationPolicy} onChange={(e) => setForm({ ...form, legalPages: { ...form.legalPages, cancellationPolicy: e.target.value } })} className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]" />
+            <textarea
+              rows={3}
+              value={form.legalPages.cancellationPolicy}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, legalPages: { ...p.legalPages, cancellationPolicy: e.target.value } }))
+              }
+              className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
           </div>
+          <div className="md:col-span-2">
+            <label className="block font-semibold text-[#486581] mb-1">Booking Conditions</label>
+            <textarea
+              rows={2}
+              value={form.legalPages.bookingConditions}
+              onChange={(e) =>
+                updateForm((p) => ({ ...p, legalPages: { ...p.legalPages, bookingConditions: e.target.value } }))
+              }
+              className="w-full px-3 py-2 rounded-lg border border-[#D9E2EC]"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-3 border-t border-[#E6ECF2]">
+          <span className="text-xs text-[#627D98]">
+            {hasUnsavedChanges ? 'You have unsaved CMS changes.' : 'Form matches published settings.'}
+          </span>
+          <button
+            type="submit"
+            disabled={savingSettings}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#FD8F1C] hover:bg-[#E07A0E] disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs font-bold transition-colors"
+          >
+            {savingSettings && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {savingSettings ? 'Saving Settings...' : 'Save All Settings'}
+          </button>
         </div>
       </form>
 

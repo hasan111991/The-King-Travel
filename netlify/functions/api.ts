@@ -101,7 +101,7 @@ export default async function handler(req: Request): Promise<Response> {
         infants: Math.max(0, Math.min(4, Number(body.infants || 0))),
         cabinClass: body.cabinClass || 'Economy',
         currency: body.currency || 'USD',
-        mode: body.mode === 'live' ? 'live' : 'demo',
+        mode: 'live',
       };
 
       const result = await searchSupplierFlights(params);

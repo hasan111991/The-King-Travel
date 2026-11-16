@@ -35,22 +35,39 @@ service cloud.firestore {
     }
 
     function isBootstrappedAdmin() {
-      return isVerifiedUser() && request.auth.token.email == 'hasanaamir815@gmail.com';
+      return isVerifiedUser()
+        && ('email' in request.auth.token)
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == 'hasanaamir815@gmail.com';
+    }
+
+    function adminRoleDoc() {
+      return get(/databases/$(database)/documents/admins/$(request.auth.uid)).data;
+    }
+
+    function hasAdminDoc() {
+      return isVerifiedUser()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     function isSuperAdmin() {
       return isBootstrappedAdmin() || (
-        isVerifiedUser() &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin'
+        hasAdminDoc() && adminRoleDoc().role == 'super_admin'
       );
     }
 
     function isAdmin() {
       return isBootstrappedAdmin() || (
-        isVerifiedUser() &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        hasAdminDoc() && adminRoleDoc().role in ['admin', 'super_admin']
       );
+    }
+
+    function isBookingAgent() {
+      return hasAdminDoc() && adminRoleDoc().role == 'booking_agent';
+    }
+
+    function isStaff() {
+      return isAdmin() || isBookingAgent();
     }
 
     function isNonEmptyStr(val, maxLen) {
@@ -73,7 +90,7 @@ service cloud.firestore {
         && (!('phone' in data) || isOptionalStr(data.phone, 40))
         && (!('whatsapp' in data) || isOptionalStr(data.whatsapp, 40))
         && (!('nationality' in data) || isOptionalStr(data.nationality, 80))
-        && data.role in ['customer', 'admin', 'super_admin']
+        && data.role in ['customer', 'booking_agent', 'admin', 'super_admin']
         && data.status in ['active', 'blocked']
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -101,7 +118,7 @@ service cloud.firestore {
         && isValidId(data.uid)
         && isNonEmptyStr(data.email, 200)
         && isNonEmptyStr(data.name, 120)
-        && data.role in ['admin', 'super_admin']
+        && data.role in ['booking_agent', 'admin', 'super_admin']
         && isNonEmptyStr(data.assignedBy, 128)
         && data.createdAt is timestamp;
     }
@@ -267,7 +284,7 @@ service cloud.firestore {
         && (!('city' in data) || isOptionalStr(data.city, 100))
         && (!('region' in data) || data.region in ['international', 'domestic', 'usa_featured'])
         && isNonEmptyStr(data.description, 500)
-        && (!('imageUrl' in data) || isOptionalStr(data.imageUrl, 500))
+        && (!('imageUrl' in data) || isOptionalStr(data.imageUrl, 1000))
         && (!('startingFare' in data) || data.startingFare is number)
         && (!('currency' in data) || isOptionalStr(data.currency, 10))
         && data.featured is bool
@@ -288,9 +305,40 @@ service cloud.firestore {
         && (!('currency' in data) || isOptionalStr(data.currency, 10))
         && isNonEmptyStr(data.description, 800)
         && (!('includedServices' in data) || (data.includedServices is list && data.includedServices.size() <= 15 && (data.includedServices.size() == 0 || data.includedServices[0] is string)))
-        && (!('imageUrl' in data) || isOptionalStr(data.imageUrl, 500))
+        && (!('imageUrl' in data) || isOptionalStr(data.imageUrl, 1000))
         && (!('featured' in data) || data.featured is bool)
         && data.status in ['active', 'inactive']
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidHotel(data) {
+      return data.keys().hasAll(['hotelId', 'name', 'city', 'country', 'category', 'starRating', 'description', 'status', 'updatedAt'])
+        && data.keys().hasOnly(['hotelId', 'name', 'city', 'country', 'category', 'pricePerNight', 'currency', 'starRating', 'description', 'amenities', 'imageUrl', 'featured', 'status', 'updatedAt'])
+        && isValidId(data.hotelId)
+        && isNonEmptyStr(data.name, 140)
+        && isNonEmptyStr(data.city, 100)
+        && isNonEmptyStr(data.country, 100)
+        && data.category in ['luxury_resort', 'city_business', 'haram_proximity', 'budget']
+        && (!('pricePerNight' in data) || data.pricePerNight is number)
+        && (!('currency' in data) || isOptionalStr(data.currency, 10))
+        && data.starRating is number && data.starRating >= 1 && data.starRating <= 5
+        && isNonEmptyStr(data.description, 800)
+        && (!('amenities' in data) || (data.amenities is list && data.amenities.size() <= 15 && (data.amenities.size() == 0 || data.amenities[0] is string)))
+        && (!('imageUrl' in data) || isOptionalStr(data.imageUrl, 1000))
+        && (!('featured' in data) || data.featured is bool)
+        && data.status in ['active', 'inactive']
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidFaq(data) {
+      return data.keys().hasAll(['faqId', 'question', 'answer', 'order', 'status', 'updatedAt'])
+        && data.keys().hasOnly(['faqId', 'question', 'answer', 'category', 'order', 'status', 'updatedAt'])
+        && isValidId(data.faqId)
+        && isNonEmptyStr(data.question, 300)
+        && isNonEmptyStr(data.answer, 2000)
+        && (!('category' in data) || isOptionalStr(data.category, 80))
+        && data.order is number
+        && data.status in ['published', 'hidden']
         && data.updatedAt is timestamp;
     }
 
@@ -362,13 +410,18 @@ service cloud.firestore {
     function isValidSettings(data) {
       return data.keys().hasAll(['agencyName', 'operatingMode', 'defaultCurrency', 'updatedAt'])
         && data.keys().hasOnly([
-          'agencyName', 'tagline', 'executiveName', 'executiveRole', 'operatingMode', 'defaultCurrency',
+          'agencyName', 'tagline', 'logoUrl', 'heroBannerUrl', 'seoTitle', 'seoDescription',
+          'executiveName', 'executiveRole', 'operatingMode', 'defaultCurrency',
           'whatsappNumber', 'contactEmail', 'contactPhone', 'secondaryPhone', 'officeAddress',
           'socialLinks', 'paymentMethods', 'bankDetails', 'faqs',
-          'legalPages', 'heroTitle', 'heroSubtitle', 'updatedAt'
+          'legalPages', 'heroTitle', 'heroSubtitle', 'footerText', 'updatedAt'
         ])
         && isNonEmptyStr(data.agencyName, 120)
         && (!('tagline' in data) || isOptionalStr(data.tagline, 300))
+        && (!('logoUrl' in data) || isOptionalStr(data.logoUrl, 1000))
+        && (!('heroBannerUrl' in data) || isOptionalStr(data.heroBannerUrl, 1000))
+        && (!('seoTitle' in data) || isOptionalStr(data.seoTitle, 160))
+        && (!('seoDescription' in data) || isOptionalStr(data.seoDescription, 400))
         && (!('executiveName' in data) || isOptionalStr(data.executiveName, 120))
         && (!('executiveRole' in data) || isOptionalStr(data.executiveRole, 120))
         && data.operatingMode in ['demo', 'live']
@@ -381,10 +434,11 @@ service cloud.firestore {
         && (!('socialLinks' in data) || data.socialLinks is map)
         && (!('paymentMethods' in data) || data.paymentMethods is map)
         && (!('bankDetails' in data) || data.bankDetails is map)
-        && (!('faqs' in data) || (data.faqs is list && data.faqs.size() <= 30))
+        && (!('faqs' in data) || (data.faqs is list && data.faqs.size() <= 30 && (data.faqs.size() == 0 || data.faqs[0] is map)))
         && (!('legalPages' in data) || data.legalPages is map)
         && (!('heroTitle' in data) || isOptionalStr(data.heroTitle, 200))
-        && (!('heroSubtitle' in data) || isOptionalStr(data.heroSubtitle, 400))
+        && (!('heroSubtitle' in data) || isOptionalStr(data.heroSubtitle, 600))
+        && (!('footerText' in data) || isOptionalStr(data.footerText, 600))
         && data.updatedAt is timestamp;
     }
 
@@ -407,7 +461,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
-      allow list: if isBootstrappedAdmin();
+      allow list: if isAdmin();
       allow create: if isValidId(userId)
         && isVerifiedUser()
         && isValidUser(incoming())
@@ -433,7 +487,7 @@ service cloud.firestore {
 
     match /passengers/{passengerId} {
       allow get: if isValidId(passengerId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isValidId(passengerId)
         && isVerifiedUser()
         && isValidSavedPassenger(incoming())
@@ -454,7 +508,7 @@ service cloud.firestore {
 
     match /admins/{uid} {
       allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
-      allow list: if isBootstrappedAdmin();
+      allow list: if isAdmin();
       allow create: if isValidId(uid)
         && isSuperAdmin()
         && isValidAdminRole(incoming())
@@ -470,8 +524,8 @@ service cloud.firestore {
     }
 
     match /bookings/{bookingId} {
-      allow get: if isValidId(bookingId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdmin());
+      allow get: if isValidId(bookingId) && isSignedIn() && (existing().userId == request.auth.uid || isStaff());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isStaff());
       allow create: if isValidId(bookingId)
         && isVerifiedUser()
         && isValidBooking(incoming())
@@ -489,7 +543,7 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          isAdmin() ||
+          isStaff() ||
           (
             existing().userId == request.auth.uid
             && !(existing().bookingStatus in ['Ticket Issued', 'Cancelled', 'Refunded'])
@@ -507,10 +561,10 @@ service cloud.firestore {
 
     match /flightRequests/{requestId} {
       allow get: if isValidId(requestId) && isSignedIn() && (
-        isAdmin() ||
+        isStaff() ||
         (isVerifiedUser() && (existing().userId == request.auth.uid || existing().email == request.auth.token.email))
       );
-      allow list: if isBootstrappedAdmin() || (
+      allow list: if isStaff() || (
         isVerifiedUser() && (resource.data.userId == request.auth.uid || resource.data.email == request.auth.token.email)
       );
       allow create: if isValidId(requestId)
@@ -532,7 +586,7 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          isAdmin() ||
+          isStaff() ||
           (
             (existing().userId == request.auth.uid || existing().email == request.auth.token.email)
             && !(existing().status in ['Ticket Issued', 'Cancelled'])
@@ -562,7 +616,7 @@ service cloud.firestore {
 
     match /payments/{paymentId} {
       allow get: if isValidId(paymentId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isValidId(paymentId)
         && isVerifiedUser()
         && isValidPayment(incoming())
@@ -651,9 +705,41 @@ service cloud.firestore {
       allow delete: if isValidId(offerId) && isAdmin();
     }
 
+    match /hotels/{hotelId} {
+      allow get: if isValidId(hotelId);
+      allow list: if true;
+      allow create: if isValidId(hotelId)
+        && isAdmin()
+        && isValidHotel(incoming())
+        && incoming().hotelId == hotelId
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(hotelId)
+        && isAdmin()
+        && isValidHotel(incoming())
+        && incoming().hotelId == existing().hotelId
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(hotelId) && isAdmin();
+    }
+
+    match /faqs/{faqId} {
+      allow get: if isValidId(faqId) && (existing().status == 'published' || isAdmin());
+      allow list: if resource.data.status == 'published' || isAdmin();
+      allow create: if isValidId(faqId)
+        && isAdmin()
+        && isValidFaq(incoming())
+        && incoming().faqId == faqId
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(faqId)
+        && isAdmin()
+        && isValidFaq(incoming())
+        && incoming().faqId == existing().faqId
+        && incoming().updatedAt == request.time;
+      allow delete: if isValidId(faqId) && isAdmin();
+    }
+
     match /testimonials/{testimonialId} {
       allow get: if isValidId(testimonialId) && (existing().status == 'published' || isAdmin());
-      allow list: if resource.data.status == 'published' || isBootstrappedAdmin();
+      allow list: if resource.data.status == 'published' || isAdmin();
       allow create: if isValidId(testimonialId)
         && isAdmin()
         && isValidTestimonial(incoming())
@@ -668,8 +754,8 @@ service cloud.firestore {
     }
 
     match /inquiries/{inquiryId} {
-      allow get: if isValidId(inquiryId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdmin());
+      allow get: if isValidId(inquiryId) && isSignedIn() && (existing().userId == request.auth.uid || isStaff());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isStaff());
       allow create: if isValidId(inquiryId)
         && isValidInquiry(incoming())
         && incoming().inquiryId == inquiryId
@@ -678,7 +764,7 @@ service cloud.firestore {
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
       allow update: if isValidId(inquiryId)
-        && isAdmin()
+        && isStaff()
         && isValidInquiry(incoming())
         && incoming().inquiryId == existing().inquiryId
         && incoming().createdAt == existing().createdAt
@@ -689,7 +775,7 @@ service cloud.firestore {
 
     match /newsletter/{subscriberId} {
       allow get: if isValidId(subscriberId) && isAdmin();
-      allow list: if isBootstrappedAdmin();
+      allow list: if isAdmin();
       allow create: if isValidId(subscriberId)
         && isValidNewsletter(incoming())
         && incoming().createdAt == request.time;
@@ -697,13 +783,13 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow get: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdmin());
+      allow get: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isStaff());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isStaff());
       allow create: if isValidId(notificationId)
         && isVerifiedUser()
         && isValidNotification(incoming())
         && incoming().notificationId == notificationId
-        && (incoming().userId == request.auth.uid || isAdmin())
+        && (incoming().userId == request.auth.uid || isStaff())
         && incoming().createdAt == request.time;
       allow update: if isValidId(notificationId)
         && isVerifiedUser()
@@ -716,9 +802,23 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /siteSettings/{settingId} {
+      allow get: if isValidId(settingId) && (settingId == 'general' || settingId == 'public' || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(settingId)
+        && isAdmin()
+        && isValidSettings(incoming())
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(settingId)
+        && isAdmin()
+        && isValidSettings(incoming())
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
     match /websiteSettings/{settingId} {
-      allow get: if isValidId(settingId) && (settingId == 'public' || isAdmin());
-      allow list: if isBootstrappedAdmin();
+      allow get: if isValidId(settingId) && (settingId == 'public' || settingId == 'general' || isAdmin());
+      allow list: if isAdmin();
       allow create: if isValidId(settingId)
         && isAdmin()
         && isValidSettings(incoming())
@@ -731,8 +831,8 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      allow get: if isValidId(settingId) && (settingId == 'public' || isAdmin());
-      allow list: if isBootstrappedAdmin();
+      allow get: if isValidId(settingId) && (settingId == 'public' || settingId == 'general' || isAdmin());
+      allow list: if isAdmin();
       allow create: if isValidId(settingId)
         && isAdmin()
         && isValidSettings(incoming())
@@ -746,9 +846,9 @@ service cloud.firestore {
 
     match /auditLogs/{logId} {
       allow get: if isValidId(logId) && isAdmin();
-      allow list: if isBootstrappedAdmin();
+      allow list: if isAdmin();
       allow create: if isValidId(logId)
-        && isAdmin()
+        && isStaff()
         && isValidAuditLog(incoming())
         && incoming().logId == logId
         && incoming().actorUid == request.auth.uid

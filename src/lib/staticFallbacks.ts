@@ -1,5 +1,4 @@
 import { searchAirports as searchLocalAirports, type AirportEntry } from '../../server/airports';
-import { DemoSupplierProvider } from '../../server/suppliers/demoProvider';
 import type {
   FareRevalidationResult,
   FlightOfferResult,
@@ -8,35 +7,22 @@ import type {
 
 export type { AirportEntry };
 
-const demoProvider = new DemoSupplierProvider();
-
 export function searchAirportsFallback(query: string): AirportEntry[] {
   return searchLocalAirports(query);
 }
 
-export async function searchFlightsStaticFallback(params: FlightSearchParams): Promise<{
-  mode: 'demo' | 'live';
+export async function searchFlightsStaticFallback(_params: FlightSearchParams): Promise<{
+  mode: 'live';
   hasLiveSupplier: boolean;
   offers: FlightOfferResult[];
   notice: string;
 }> {
-  if (params.mode === 'live') {
-    return {
-      mode: 'live',
-      hasLiveSupplier: false,
-      offers: [],
-      notice:
-        'Live Mode — Manual Agency Quotation Workflow active. Submit a Custom Flight Request or select an agency-published quotation below.',
-    };
-  }
-
-  const demoOffers = await demoProvider.searchFlights(params);
   return {
-    mode: 'demo',
+    mode: 'live',
     hasLiveSupplier: false,
-    offers: demoOffers,
+    offers: [],
     notice:
-      'Demo Mode Active: Showing clearly labeled sample flights for booking workflow evaluation. Real bookings submitted here are handled by our ticketing desk.',
+      'Live airline GDS API credentials are not active on static hosting. Review published Agency Flight Offers below or submit a Custom Flight Request to receive airline fare quotations from our ticketing specialists.',
   };
 }
 
@@ -46,7 +32,7 @@ export async function revalidateOfferStaticFallback(
   if (offer.provider === 'manual_offer') {
     return {
       offerId: offer.id,
-      provider: 'Manual Agency Quotation',
+      provider: 'Agency Manual Quotation',
       available: true,
       isDemo: false,
       estimatedPrice: offer.totalPrice,
@@ -56,9 +42,9 @@ export async function revalidateOfferStaticFallback(
       fareBreakdown: offer.fareBreakdown,
       revalidatedAt: new Date().toISOString(),
       message:
-        'Estimated agency quotation fare. Final confirmed supplier fare will be locked by our ticketing desk prior to e-ticket issuance.',
+        'Published agency quotation fare. Final seat availability and fare rules are verified by our ticketing desk prior to e-ticket issuance.',
     };
   }
 
-  return demoProvider.revalidateFare(offer);
+  throw new Error('Live supplier API revalidation is unavailable on static hosting.');
 }

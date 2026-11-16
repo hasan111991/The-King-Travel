@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useAgency } from '../context/AgencyContext';
 
 interface BrandLogoProps {
   variant?: 'light' | 'dark';
@@ -6,7 +7,15 @@ interface BrandLogoProps {
 }
 
 export function BrandLogo({ variant = 'dark', size = 'md' }: BrandLogoProps) {
+  const { settings } = useAgency();
   const [imgFailed, setImgFailed] = useState(false);
+  const logoSrc = settings.logoUrl?.trim() || `${import.meta.env.BASE_URL}official-logo.png`;
+  const agencyLabel = settings.agencyName?.trim() || 'The King Travel';
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [logoSrc]);
+
   const textColor = variant === 'light' ? 'text-white' : 'text-[#0F2942]';
   const imgHeight = size === 'sm' ? 'h-9' : 'h-11';
   const textSize = size === 'sm' ? 'text-lg' : 'text-xl';
@@ -20,8 +29,8 @@ export function BrandLogo({ variant = 'dark', size = 'md' }: BrandLogoProps) {
           }`}
         >
           <img
-            src={`${import.meta.env.BASE_URL}official-logo.png`}
-            alt="The King Travel Official Logo"
+            src={logoSrc}
+            alt={`${agencyLabel} Official Logo`}
             onError={() => setImgFailed(true)}
             className={`${imgHeight} w-auto object-contain`}
           />
@@ -49,7 +58,7 @@ export function BrandLogo({ variant = 'dark', size = 'md' }: BrandLogoProps) {
         </svg>
       )}
       <span className={`font-display font-bold tracking-tight ${textSize} ${textColor}`}>
-        The King Travel
+        {agencyLabel}
       </span>
     </span>
   );

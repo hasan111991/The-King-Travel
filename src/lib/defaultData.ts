@@ -7,6 +7,7 @@ import destKualaLumpurImg from '../assets/images/dest_kuala_lumpur_1794775340187
 import type {
   AgencySettings,
   DestinationItem,
+  HotelItem,
   ManualFlightOffer,
   SpecialOfferItem,
   TestimonialItem,
@@ -25,9 +26,14 @@ export const ASSETS = {
 export const DEFAULT_AGENCY_SETTINGS: AgencySettings = {
   agencyName: 'The King Travel',
   tagline: 'Your Ultimate Travel Partner!',
+  logoUrl: '',
+  heroBannerUrl: '',
+  seoTitle: 'The King Travel – Your Ultimate Travel Partner!',
+  seoDescription:
+    'Discover the world with The King Travel. Search international & domestic flights, 3 Check Bags deals, luxury hotel inquiries, Umrah & Hajj assistance, and holiday packages.',
   executiveName: 'M Kamal Siddiqui',
   executiveRole: 'CEO of THE KING TRAVEL',
-  operatingMode: 'demo',
+  operatingMode: 'live',
   defaultCurrency: 'USD',
   whatsappNumber: '+1 571 620 9414',
   contactEmail: 'thekingtravel22@gmail.com',
@@ -37,6 +43,8 @@ export const DEFAULT_AGENCY_SETTINGS: AgencySettings = {
   heroTitle: 'Discover the World with The King Travel',
   heroSubtitle:
     'Your journey deserves exceptional service. Discover destinations, explore flight deals and travel with confidence.',
+  footerText:
+    'At The King Travel, we believe that travel is not just about reaching a destination — it is about creating unforgettable memories, experiencing new cultures, and exploring the world with comfort and confidence.',
   socialLinks: {
     facebook: 'https://www.facebook.com/profile.php?id=61578912663167',
     youtube: 'https://www.youtube.com/@thekingtravel-y7b',
@@ -52,25 +60,24 @@ export const DEFAULT_AGENCY_SETTINGS: AgencySettings = {
     cardGateway: true,
   },
   bankDetails: {
-    bankName: 'Bank Name (Editable in Admin Settings)',
-    accountTitle: 'The King Travel LLC (Editable Placeholder)',
-    accountNumber: 'Account / Routing Number (Editable in Admin Settings)',
-    iban: 'IBAN / SWIFT (Editable Placeholder)',
-    jazzCashNumber: 'JazzCash Account (Optional - Configure in Admin)',
-    easypaisaNumber: 'Easypaisa Account (Optional - Configure in Admin)',
-    instructions:
-      'Transfer the exact booking amount to the agency account configured by our Dallas office and upload your payment receipt. Bookings remain pending until manual verification by our accounts desk.',
+    bankName: '',
+    accountTitle: '',
+    accountNumber: '',
+    iban: '',
+    jazzCashNumber: '',
+    easypaisaNumber: '',
+    instructions: '',
   },
   faqs: [
     {
       question: 'How does the Discounted Airline Tickets / 3 Check Bags Deal work?',
       answer:
-        'Selected international corridors arranged through our ticketing desk qualify for promotional fares featuring up to 3 checked bags at no extra cost. Availability varies by carrier, season, and cabin class—request a quotation or search flights to confirm eligible routes.',
+        'Selected international corridors arranged through our ticketing desk qualify for promotional fares featuring up to 3 checked bags at no extra cost. Availability varies by carrier, season, and cabin class—submit a Custom Flight Request or search flights to confirm eligible routes.',
     },
     {
       question: 'When do I receive my confirmed airline e-ticket?',
       answer:
-        'A booking confirmation generated at checkout is an agency reference and payment record. Your official airline-issued e-ticket PDF is uploaded to your customer portal and emailed after payment verification and supplier ticketing.',
+        'A booking confirmation generated after selecting a quotation is an agency booking reference and payment record. Your official airline-issued e-ticket PDF is uploaded to your customer portal and sent once payment verification and supplier ticketing are complete.',
     },
     {
       question: 'Do you arrange Hajj & Umrah packages and guided tours from the USA?',
@@ -78,9 +85,9 @@ export const DEFAULT_AGENCY_SETTINGS: AgencySettings = {
         'Yes. Based in Dallas, Texas, The King Travel coordinates Makkah & Madinah Umrah Season packages, Hajj assistance, curated honeymoon itineraries, and custom tour packages across Europe, Asia, the Middle East, and Northern Pakistan.',
     },
     {
-      question: 'What is the difference between Demo Mode and Live Supplier Mode?',
+      question: 'How does the Custom Flight Booking Request and Quotation workflow operate?',
       answer:
-        'Demo Mode displays clearly labeled sample flights so you can test the full search, booking, and verification workflow. Live Mode connects authorized Amadeus and Duffel supplier APIs alongside direct manual agency desk quotations.',
+        'Submit your one-way, round-trip, or multi-city itinerary online with preferred airlines and passenger counts. Our ticketing specialists check live authorized supplier availability, send multiple comparable fare quotations to your customer dashboard, verify your payment receipt, and upload your official airline e-ticket PDF.',
     },
   ],
   legalPages: {
@@ -110,7 +117,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Explore modern luxury, desert adventures, iconic Burj Khalifa views, and Abu Dhabi cultural landmarks.',
     imageUrl: ASSETS.destDubai,
-    startingFare: 680,
     currency: 'USD',
     featured: true,
     order: 1,
@@ -126,7 +132,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Experience spiritual journeys with guided Umrah packages to Makkah and Madinah and dedicated Hajj travel assistance.',
     imageUrl: ASSETS.destSaudi,
-    startingFare: 790,
     currency: 'USD',
     featured: true,
     order: 2,
@@ -142,7 +147,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Wander through vibrant bazaars, enjoy Bosphorus cruises, hot air balloon rides in Cappadocia, and ancient ruins.',
     imageUrl: ASSETS.destIstanbul,
-    startingFare: 690,
     currency: 'USD',
     featured: true,
     order: 3,
@@ -158,7 +162,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Vibrant Kuala Lumpur, the Petronas Twin Towers, multicultural cuisine, and tropical beaches in Langkawi.',
     imageUrl: ASSETS.destKualaLumpur,
-    startingFare: 890,
     currency: 'USD',
     featured: true,
     order: 4,
@@ -174,7 +177,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Frequent transatlantic and connecting flights into Heathrow with curated hotel and group booking options.',
     imageUrl: ASSETS.destLondon,
-    startingFare: 610,
     currency: 'USD',
     featured: true,
     order: 5,
@@ -190,7 +192,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Modern marvels, Marina Bay Sands, Gardens by the Bay, world-class shopping on Orchard Road, and culinary excellence.',
     imageUrl: '',
-    startingFare: 920,
     currency: 'USD',
     featured: true,
     order: 6,
@@ -206,7 +207,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Relax on Bali beaches, unwind in Ubud greenery, and discover ancient temples with island resorts.',
     imageUrl: '',
-    startingFare: 980,
     currency: 'USD',
     featured: true,
     order: 7,
@@ -222,7 +222,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Indulge in private overwater villas, turquoise waters, snorkeling excursions, and bespoke resort tranquility.',
     imageUrl: '',
-    startingFare: 1080,
     currency: 'USD',
     featured: true,
     order: 8,
@@ -238,7 +237,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Ride scenic alpine trains, explore snowy Swiss Alps peaks, and relax in picturesque lakeside towns.',
     imageUrl: '',
-    startingFare: 720,
     currency: 'USD',
     featured: true,
     order: 9,
@@ -255,7 +253,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     region: 'usa_featured',
     description: 'Top South American getaway from USA hubs with competitive multi-carrier fares.',
     imageUrl: '',
-    startingFare: 650,
     currency: 'USD',
     featured: true,
     order: 10,
@@ -270,7 +267,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     region: 'usa_featured',
     description: 'Mediterranean heritage, Aegean island escapes, and summer resort stays from the USA.',
     imageUrl: '',
-    startingFare: 710,
     currency: 'USD',
     featured: true,
     order: 11,
@@ -285,7 +281,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     region: 'usa_featured',
     description: 'Timeless architecture, regional cuisine, and custom European itineraries departing the USA.',
     imageUrl: '',
-    startingFare: 660,
     currency: 'USD',
     featured: true,
     order: 12,
@@ -300,7 +295,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     region: 'usa_featured',
     description: 'Historic Eastern European castles, scenic Carpathian trails, and cultural tours.',
     imageUrl: '',
-    startingFare: 705,
     currency: 'USD',
     featured: true,
     order: 13,
@@ -315,7 +309,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     region: 'usa_featured',
     description: 'Iconic Parisian landmarks, boutique hotels, and curated transatlantic flight packages.',
     imageUrl: '',
-    startingFare: 640,
     currency: 'USD',
     featured: true,
     order: 14,
@@ -333,7 +326,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Discover serene valleys, breathtaking lakes, Hunza, Skardu, and Fairy Meadows with guided mountain tours.',
     imageUrl: '',
-    startingFare: 920,
     currency: 'USD',
     featured: false,
     order: 15,
@@ -349,7 +341,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Direct connecting air corridors into Pakistan’s capital and gateway to northern mountain valleys.',
     imageUrl: '',
-    startingFare: 820,
     currency: 'USD',
     featured: false,
     order: 16,
@@ -365,7 +356,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Cultural capital connections with 3 checked baggage seasonal promotions for family travel.',
     imageUrl: '',
-    startingFare: 815,
     currency: 'USD',
     featured: false,
     order: 17,
@@ -381,7 +371,6 @@ export const DEFAULT_DESTINATIONS: DestinationItem[] = [
     description:
       'Frequent international and domestic flight arrivals serving southern Pakistan and commercial travelers.',
     imageUrl: '',
-    startingFare: 810,
     currency: 'USD',
     featured: false,
     order: 18,
@@ -396,8 +385,7 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'tour',
     destination: 'Malaysia',
     destinationSlug: 'malaysia',
-    duration: '6 Days / 5 Nights',
-    price: 1290,
+    duration: 'Custom Itinerary',
     currency: 'USD',
     description: 'Vibrant Kuala Lumpur city highlights and tropical beaches in Langkawi.',
     includedServices: ['Hotel Accommodation', 'City Tours', 'Airport Transfers', 'Visa Guidance'],
@@ -411,11 +399,10 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'holiday',
     destination: 'Singapore',
     destinationSlug: 'singapore',
-    duration: '5 Days / 4 Nights',
-    price: 1380,
+    duration: 'Custom Itinerary',
     currency: 'USD',
     description: 'Modern marvels, Marina Bay, Orchard Road shopping, and culinary excellence.',
-    includedServices: ['4-Star Hotel', 'Marina Bay Tour', 'Airport Transfers', 'Daily Breakfast'],
+    includedServices: ['Hotel Stay', 'Marina Bay Tour', 'Airport Transfers', 'Daily Breakfast'],
     featured: false,
     status: 'active',
   },
@@ -425,8 +412,7 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'holiday',
     destination: 'Indonesia',
     destinationSlug: 'indonesia',
-    duration: '7 Days / 6 Nights',
-    price: 1450,
+    duration: 'Custom Itinerary',
     currency: 'USD',
     description: 'Relax on Bali beaches, unwind in Ubud greenery, and discover ancient temples.',
     includedServices: ['Resort Stay', 'Ubud Cultural Tour', 'Private Transfers', 'Daily Breakfast'],
@@ -439,8 +425,7 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'hajj_umrah',
     destination: 'Saudi Arabia',
     destinationSlug: 'saudi-arabia',
-    duration: '10 Days / 9 Nights',
-    price: 1850,
+    duration: 'Seasonal Umrah Schedule',
     currency: 'USD',
     description:
       'Experience spiritual journeys with guided Umrah packages to Makkah and Madinah including Haram-proximity hotels and Ziyarat coordination.',
@@ -460,7 +445,8 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'hajj_umrah',
     destination: 'Saudi Arabia',
     destinationSlug: 'saudi-arabia',
-    duration: '14–21 Days (Seasonal)',
+    duration: 'Seasonal Hajj Program',
+    currency: 'USD',
     description:
       'Comprehensive Hajj travel planning, airline seat coordination, documentation checklists, and experienced group guidance.',
     includedServices: [
@@ -479,8 +465,7 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'tour',
     destination: 'Dubai',
     destinationSlug: 'dubai',
-    duration: '6 Days / 5 Nights',
-    price: 1190,
+    duration: 'Custom Itinerary',
     currency: 'USD',
     description: 'Explore modern luxury, desert adventures, and Abu Dhabi cultural landmarks.',
     includedServices: ['Luxury Hotel Stay', 'Desert Safari', 'City Tour', 'Airport Transfers'],
@@ -494,8 +479,7 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'tour',
     destination: 'Istanbul',
     destinationSlug: 'istanbul',
-    duration: '8 Days / 7 Nights',
-    price: 1590,
+    duration: 'Custom Itinerary',
     currency: 'USD',
     description:
       'Wander through vibrant bazaars, enjoy hot air balloon rides in Cappadocia, and explore ancient ruins.',
@@ -510,8 +494,7 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'tour',
     destination: 'Northern Pakistan',
     destinationSlug: 'northern-pakistan',
-    duration: '9 Days / 8 Nights',
-    price: 1120,
+    duration: 'Custom Itinerary',
     currency: 'USD',
     description: 'Discover serene valleys and breathtaking lakes in Hunza, Skardu, and Fairy Meadows.',
     includedServices: ['Mountain Lodge Stays', 'Private 4x4 Transport', 'Experienced Local Guide', 'Meals'],
@@ -526,11 +509,10 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'honeymoon',
     destination: 'Dubai',
     destinationSlug: 'dubai',
-    duration: '5–7 Days',
-    price: 1490,
+    duration: 'Custom Honeymoon Itinerary',
     currency: 'USD',
     description: 'Burj Khalifa views, luxury shopping, desert safari, and romantic marina dining.',
-    includedServices: ['5-Star Couples Resort', 'Burj Khalifa Entry', 'Private Desert Safari', 'Airport Transfers'],
+    includedServices: ['Couples Resort Stay', 'Burj Khalifa Entry', 'Private Desert Safari', 'Airport Transfers'],
     imageUrl: ASSETS.destDubai,
     featured: true,
     status: 'active',
@@ -541,8 +523,7 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'honeymoon',
     destination: 'Istanbul',
     destinationSlug: 'istanbul',
-    duration: '7–10 Days',
-    price: 1890,
+    duration: 'Custom Honeymoon Itinerary',
     currency: 'USD',
     description: 'Hotels, guided city tours, sunset Bosphorus cruise, and Cappadocia hot air balloon experience.',
     includedServices: ['Boutique Hotel Stays', 'Bosphorus Sunset Cruise', 'Hot Air Balloon Option', 'City Tours'],
@@ -556,8 +537,7 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'honeymoon',
     destination: 'Maldives',
     destinationSlug: 'maldives',
-    duration: '7 Days',
-    price: 2650,
+    duration: 'Custom Honeymoon Itinerary',
     currency: 'USD',
     description: 'Overwater villa, private beach dinner, snorkeling excursions, and couples spa ritual.',
     includedServices: ['Overwater Villa', 'Private Beach Dinner', 'Snorkeling Excursion', 'Couples Spa'],
@@ -570,8 +550,7 @@ export const DEFAULT_TRAVEL_PACKAGES: TravelPackageItem[] = [
     category: 'honeymoon',
     destination: 'Switzerland',
     destinationSlug: 'switzerland',
-    duration: '7–10 Days',
-    price: 2450,
+    duration: 'Custom Honeymoon Itinerary',
     currency: 'USD',
     description: 'Zurich, Interlaken, and Lucerne lakeside stays with panoramic Swiss scenic train rides.',
     includedServices: ['Zurich & Lucerne Hotels', 'Swiss Scenic Rail Pass', 'Interlaken Excursion', 'Daily Breakfast'],
@@ -590,7 +569,7 @@ export const DEFAULT_SPECIAL_OFFERS: SpecialOfferItem[] = [
     destination: 'DXB',
     discountLabel: '3 Check Bags Deal',
     promoCode: '3BAGS-DEAL',
-    validUntil: '2026-12-31',
+    validUntil: 'Seasonal Availability',
     status: 'active',
   },
   {
@@ -602,7 +581,7 @@ export const DEFAULT_SPECIAL_OFFERS: SpecialOfferItem[] = [
     destination: 'MLE',
     discountLabel: 'Negotiated Hotel Rates',
     promoCode: 'HOTEL-VIP',
-    validUntil: '2026-12-31',
+    validUntil: 'Seasonal Availability',
     status: 'active',
   },
   {
@@ -614,7 +593,7 @@ export const DEFAULT_SPECIAL_OFFERS: SpecialOfferItem[] = [
     destination: 'JED',
     discountLabel: 'Umrah Season',
     promoCode: 'UMRAH-SEASON',
-    validUntil: '2026-12-31',
+    validUntil: 'Seasonal Availability',
     status: 'active',
   },
 ];
@@ -623,7 +602,7 @@ export const DEFAULT_TESTIMONIALS: TestimonialItem[] = [
   {
     testimonialId: 'test_linda_paulo',
     customerName: 'Linda and Paulo',
-    city: 'USA Travelers',
+    city: 'Italy Travelers',
     route: 'From Italy',
     rating: 5,
     quote:
@@ -633,7 +612,7 @@ export const DEFAULT_TESTIMONIALS: TestimonialItem[] = [
   {
     testimonialId: 'test_jacques_marie',
     customerName: 'Jacques and Marie',
-    city: 'USA Travelers',
+    city: 'France Travelers',
     route: 'From France',
     rating: 5,
     quote:
@@ -643,7 +622,7 @@ export const DEFAULT_TESTIMONIALS: TestimonialItem[] = [
   {
     testimonialId: 'test_rose_peter',
     customerName: 'Rose and Peter',
-    city: 'USA Travelers',
+    city: 'UK Travelers',
     route: 'From United Kingdom',
     rating: 5,
     quote: 'Everything was perfectly arranged. We truly appreciate all your efforts!',
@@ -651,48 +630,9 @@ export const DEFAULT_TESTIMONIALS: TestimonialItem[] = [
   },
 ];
 
-export const DEFAULT_MANUAL_OFFERS: ManualFlightOffer[] = [
-  {
-    offerId: 'man_dfw_dxb_01',
-    airline: 'Emirates (3 Check Bags Agency Deal)',
-    airlineCode: 'EK',
-    flightNumber: 'EK-222',
-    origin: 'Dallas',
-    originCode: 'DFW',
-    destination: 'Dubai',
-    destinationCode: 'DXB',
-    departureDate: '2026-12-10',
-    cabinClass: 'Economy',
-    price: 785,
-    currency: 'USD',
-    baggage: '3 Checked Bags Deal + 7 kg Cabin',
-    validity: '2026-12-05',
-    notes: 'Discounted Airline Tickets / 3 Check Bags promotional quotation; seats confirmed upon request.',
-    status: 'active',
-    createdAt: null,
-    updatedAt: null,
-  },
-  {
-    offerId: 'man_jfk_jed_02',
-    airline: 'Saudia (Umrah Season Quotation)',
-    airlineCode: 'SV',
-    flightNumber: 'SV-020',
-    origin: 'New York',
-    originCode: 'JFK',
-    destination: 'Jeddah',
-    destinationCode: 'JED',
-    departureDate: '2026-12-15',
-    cabinClass: 'Economy',
-    price: 840,
-    currency: 'USD',
-    baggage: '2 x 23 kg Checked + 7 kg Hand',
-    validity: '2026-12-10',
-    notes: 'Ideal for Makkah & Madinah Umrah travelers. Subject to final supplier confirmation.',
-    status: 'active',
-    createdAt: null,
-    updatedAt: null,
-  },
-];
+export const DEFAULT_HOTELS: HotelItem[] = [];
+
+export const DEFAULT_MANUAL_OFFERS: ManualFlightOffer[] = [];
 
 export const TRAVEL_SERVICES = [
   {

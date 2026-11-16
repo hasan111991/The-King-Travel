@@ -1,5 +1,4 @@
 import { AmadeusSupplierProvider } from './amadeusProvider.ts';
-import { DemoSupplierProvider } from './demoProvider.ts';
 import { DuffelSupplierProvider } from './duffelProvider.ts';
 import type {
   FareRevalidationResult,
@@ -10,7 +9,6 @@ import type {
 
 const amadeus = new AmadeusSupplierProvider();
 const duffel = new DuffelSupplierProvider();
-const demo = new DemoSupplierProvider();
 
 export function getSupplierStatuses(): SupplierStatus[] {
   return [
@@ -30,14 +28,14 @@ export function getSupplierStatuses(): SupplierStatus[] {
 }
 
 export async function searchSupplierFlights(params: FlightSearchParams): Promise<{
-  mode: 'demo' | 'live';
+  mode: 'live';
   hasLiveSupplier: boolean;
   offers: FlightOfferResult[];
   notice: string;
 }> {
   const hasLiveSupplier = amadeus.isConfigured() || duffel.isConfigured();
 
-  if (params.mode === 'live' && hasLiveSupplier) {
+  if (hasLiveSupplier) {
     const results: FlightOfferResult[] = [];
     const errors: string[] = [];
 
@@ -74,28 +72,17 @@ export async function searchSupplierFlights(params: FlightSearchParams): Promise
       offers: [],
       notice:
         errors.length > 0
-          ? `Supplier API notice: ${errors.join(' | ')}. You may submit a manual quotation request.`
-          : 'No live supplier seats matched this route/date. Submit a manual quotation request below.',
+          ? `Supplier API notice: ${errors.join(' | ')}. Please submit a Custom Flight Request below for manual agency ticketing assistance.`
+          : 'No live supplier seats matched this route/date. Submit a Custom Flight Request below so our specialists can quote available airline options.',
     };
   }
 
-  if (params.mode === 'live' && !hasLiveSupplier) {
-    return {
-      mode: 'live',
-      hasLiveSupplier: false,
-      offers: [],
-      notice:
-        'Live booking mode is active, but no supplier API credentials (Amadeus or Duffel) are configured on the server yet. Customers can review manual agency offers or submit a quotation booking request.',
-    };
-  }
-
-  const demoOffers = await demo.searchFlights(params);
   return {
-    mode: 'demo',
-    hasLiveSupplier,
-    offers: demoOffers,
+    mode: 'live',
+    hasLiveSupplier: false,
+    offers: [],
     notice:
-      'Demo Mode Active: Showing clearly labeled sample flights for booking workflow evaluation. Configure Amadeus or Duffel API keys on the server for live airline inventory.',
+      'Live airline GDS API credentials (Amadeus or Duffel) are not configured on this server yet. Review published Agency Flight Offers below or submit a Custom Flight Request to receive tailored airline quotations.',
   };
 }
 
@@ -109,7 +96,7 @@ export async function revalidateOfferFare(offer: FlightOfferResult): Promise<Far
   if (offer.provider === 'manual_offer') {
     return {
       offerId: offer.id,
-      provider: 'Manual Agency Quotation',
+      provider: 'Agency Manual Quotation',
       available: true,
       isDemo: false,
       estimatedPrice: offer.totalPrice,
@@ -119,8 +106,8 @@ export async function revalidateOfferFare(offer: FlightOfferResult): Promise<Far
       fareBreakdown: offer.fareBreakdown,
       revalidatedAt: new Date().toISOString(),
       message:
-        'Estimated agency quotation fare. Final confirmed supplier fare will be locked by our ticketing desk prior to e-ticket issuance.',
+        'Published agency quotation fare. Final seat availability and ticketing rules are confirmed by our Dallas ticketing desk prior to e-ticket issuance.',
     };
   }
-  return demo.revalidateFare(offer);
+  throw new Error('Live supplier credentials are not active to revalidate this offer.');
 }

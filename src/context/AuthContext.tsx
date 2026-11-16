@@ -22,23 +22,20 @@ import {
   testFirestoreConnection,
 } from '../lib/firebase';
 import type { UserProfile } from '../types/travel';
-import {
-  DEMO_ADMIN_EMAIL,
-  DEMO_ADMIN_PASSWORD,
-} from '../lib/demoAdminData';
 
-const DEMO_ADMIN_STORAGE_KEY = 'kt_demo_admin_session';
+export type StaffRole = 'super_admin' | 'admin' | 'booking_agent' | null;
 
 interface AuthContextValue {
   user: User | null;
   profile: UserProfile | null;
+  adminRole: StaffRole;
   isAdmin: boolean;
   isSuperAdmin: boolean;
-  isDemoAdmin: boolean;
+  isBookingAgent: boolean;
+  isStaff: boolean;
   authReady: boolean;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
-  loginDemoAdmin: (email: string, password: string) => boolean;
   registerWithEmail: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (updates: { name: string; phone: string; whatsapp: string; nationality: string }) => Promise<void>;
@@ -53,22 +50,13 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [isDemoAdmin, setIsDemoAdmin] = useState<boolean>(() => {
-    try {
-      return typeof window !== 'undefined' && window.sessionStorage.getItem(DEMO_ADMIN_STORAGE_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
+  const [adminRole, setAdminRole] = useState<StaffRole>(null);
   const [authReady, setAuthReady] = useState(false);
 
   const syncUserProfileAndRoles = useCallback(async (firebaseUser: User | null) => {
     if (!firebaseUser) {
       setProfile(null);
-      setIsAdmin(false);
-      setIsSuperAdmin(false);
+      setAdminRole(null);
       return;
     }
 
@@ -80,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       handleFirestoreError(err, OperationType.GET, `users/${firebaseUser.uid}`);
     }
 
-    if (!userSnap.exists()) {
+    if (userSnap && !userSnap.exists()) {
       // Create initial customer profile if email is verified (Google Sign-In is verified immediately)
       if (firebaseUser.emailVerified) {
         const newProfile = {
@@ -108,30 +96,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(userSnap.data() as UserProfile);
     }
 
-    // Check authoritative admin status
+    // Check authoritative staff/admin status
     const isBootstrapped =
       firebaseUser.emailVerified &&
       firebaseUser.email?.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL.toLowerCase();
 
     if (isBootstrapped) {
-      setIsAdmin(true);
-      setIsSuperAdmin(true);
+      setAdminRole('super_admin');
+      return;
+    }
+
+    if (!firebaseUser.emailVerified) {
+      setAdminRole(null);
       return;
     }
 
     try {
       const adminSnap = await getDoc(doc(db, 'admins', firebaseUser.uid));
       if (adminSnap.exists()) {
-        const adminData = adminSnap.data();
-        setIsAdmin(true);
-        setIsSuperAdmin(adminData.role === 'super_admin');
+        const role = adminSnap.data().role;
+        if (role === 'super_admin' || role === 'admin' || role === 'booking_agent') {
+          setAdminRole(role);
+        } else {
+          setAdminRole(null);
+        }
       } else {
-        setIsAdmin(false);
-        setIsSuperAdmin(false);
+        setAdminRole(null);
       }
     } catch {
-      setIsAdmin(false);
-      setIsSuperAdmin(false);
+      setAdminRole(null);
     }
   }, []);
 
@@ -150,39 +143,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsub();
   }, [syncUserProfileAndRoles]);
 
-  const clearDemoAdmin = () => {
-    setIsDemoAdmin(false);
-    try {
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.removeItem(DEMO_ADMIN_STORAGE_KEY);
-      }
-    } catch {}
-  };
-
   const loginWithGoogle = async () => {
-    clearDemoAdmin();
     const cred = await signInWithPopup(auth, googleProvider);
     await syncUserProfileAndRoles(cred.user);
   };
 
   const loginWithEmail = async (email: string, password: string) => {
-    clearDemoAdmin();
     const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
     await syncUserProfileAndRoles(cred.user);
-  };
-
-  const loginDemoAdmin = (email: string, password: string) => {
-    const matched =
-      email.trim().toLowerCase() === DEMO_ADMIN_EMAIL.toLowerCase() &&
-      password === DEMO_ADMIN_PASSWORD;
-    if (!matched) return false;
-    setIsDemoAdmin(true);
-    try {
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(DEMO_ADMIN_STORAGE_KEY, '1');
-      }
-    } catch {}
-    return true;
   };
 
   const registerWithEmail = async (name: string, email: string, password: string, phone?: string) => {
@@ -206,13 +174,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    clearDemoAdmin();
     if (auth.currentUser) {
       await signOut(auth);
     }
     setProfile(null);
-    setIsAdmin(false);
-    setIsSuperAdmin(false);
+    setAdminRole(null);
   };
 
   const updateUserProfile = async (updates: {
@@ -258,18 +224,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await syncUserProfileAndRoles(auth.currentUser);
   };
 
+  const isSuperAdmin = adminRole === 'super_admin';
+  const isAdmin = adminRole === 'super_admin' || adminRole === 'admin';
+  const isBookingAgent = adminRole === 'booking_agent';
+  const isStaff = isAdmin || isBookingAgent;
+
   return (
     <AuthContext.Provider
       value={{
         user,
         profile,
+        adminRole,
         isAdmin,
         isSuperAdmin,
-        isDemoAdmin,
+        isBookingAgent,
+        isStaff,
         authReady,
         loginWithGoogle,
         loginWithEmail,
-        loginDemoAdmin,
         registerWithEmail,
         logout,
         updateUserProfile,

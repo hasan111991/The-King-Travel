@@ -84,7 +84,7 @@ export function Footer() {
         <div>
           <BrandLogo variant="light" size="sm" />
           <p className="text-sm text-[#BCCCDC] mt-4 leading-relaxed">
-            <strong className="text-white">{settings.tagline}</strong> At The King Travel, we believe that travel is not just about reaching a destination – it’s about creating unforgettable memories, experiencing new cultures, and exploring the world with comfort and confidence.
+            <strong className="text-white">{settings.tagline}</strong> At {settings.agencyName || 'The King Travel'}, we believe that travel is not just about reaching a destination – it’s about creating unforgettable memories, experiencing new cultures, and exploring the world with comfort and confidence.
           </p>
           <div className="mt-4 flex flex-wrap gap-4 text-xs text-[#9FB3C8]">
             {settings.socialLinks?.facebook && (
@@ -125,6 +125,26 @@ export function Footer() {
                 className="hover:text-[#FD8F1C] transition-colors"
               >
                 TikTok
+              </a>
+            )}
+            {settings.socialLinks?.linkedin && (
+              <a
+                href={settings.socialLinks.linkedin}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-[#FD8F1C] transition-colors"
+              >
+                LinkedIn
+              </a>
+            )}
+            {settings.socialLinks?.x && (
+              <a
+                href={settings.socialLinks.x}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:text-[#FD8F1C] transition-colors"
+              >
+                X
               </a>
             )}
           </div>

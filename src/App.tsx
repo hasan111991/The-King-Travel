@@ -3,7 +3,7 @@ import { BrowserRouter, HashRouter, Navigate, Route, Routes, useLocation } from 
 import { Footer } from './components/Footer';
 import { Navbar } from './components/Navbar';
 import { WhatsAppButton } from './components/WhatsAppButton';
-import { AgencyProvider } from './context/AgencyContext';
+import { AgencyProvider, useAgency } from './context/AgencyContext';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { AboutPage } from './pages/AboutPage';
@@ -76,41 +76,69 @@ class AppErrorBoundary extends React.Component<
   }
 }
 
-const ROUTE_TITLES: Record<string, string> = {
-  '/': 'The King Travel – Your Ultimate Travel Partner!',
-  '/flights': 'Search Flights | The King Travel',
-  '/flight-request': 'Flight Booking Request | The King Travel',
-  '/hotels': 'Hotel Reservations | The King Travel',
-  '/hajj-umrah': 'Hajj & Umrah Packages | The King Travel',
-  '/packages': 'Holiday, Tour & Honeymoon Packages | The King Travel',
-  '/destinations': 'International & Domestic Destinations | The King Travel',
-  '/services': 'Travel Services | The King Travel',
-  '/about': 'About Us | The King Travel',
-  '/contact': 'Contact Support | The King Travel',
-  '/login': 'Sign In | The King Travel',
-  '/register': 'Create Account | The King Travel',
-  '/my-bookings': 'My Bookings | The King Travel',
-  '/book': 'Complete Your Booking | The King Travel',
-  '/terms': 'Terms & Conditions | The King Travel',
-  '/privacy': 'Privacy Policy | The King Travel',
-  '/refund-policy': 'Refund Policy | The King Travel',
-  '/cancellation-policy': 'Cancellation Policy | The King Travel',
-  '/booking-conditions': 'Booking Conditions | The King Travel',
-  '/admin': 'Admin Operations Console | The King Travel',
+const ROUTE_LABELS: Record<string, string> = {
+  '/flights': 'Search Flights',
+  '/flight-request': 'Flight Booking Request',
+  '/hotels': 'Hotel Reservations',
+  '/hajj-umrah': 'Hajj & Umrah Packages',
+  '/packages': 'Holiday, Tour & Honeymoon Packages',
+  '/destinations': 'International & Domestic Destinations',
+  '/services': 'Travel Services',
+  '/about': 'About Us',
+  '/contact': 'Contact Support',
+  '/login': 'Sign In',
+  '/register': 'Create Account',
+  '/my-bookings': 'My Bookings',
+  '/book': 'Complete Your Booking',
+  '/terms': 'Terms & Conditions',
+  '/privacy': 'Privacy Policy',
+  '/refund-policy': 'Refund Policy',
+  '/cancellation-policy': 'Cancellation Policy',
+  '/booking-conditions': 'Booking Conditions',
+  '/admin': 'Admin Operations Console',
 };
+
+function updateMetaContent(selector: string, content: string) {
+  const el = document.querySelector<HTMLMetaElement>(selector);
+  if (el && content) {
+    el.setAttribute('content', content);
+  }
+}
 
 function PageMetadataSync() {
   const { pathname } = useLocation();
+  const { settings } = useAgency();
+
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [pathname]);
+
+  useEffect(() => {
+    const brandName = settings.agencyName?.trim() || 'The King Travel';
+    const homeSeoTitle =
+      settings.seoTitle?.trim() || `${brandName} – ${settings.tagline || 'Your Ultimate Travel Partner!'}`;
+
+    let resolvedTitle = homeSeoTitle;
     if (pathname.startsWith('/destinations/')) {
       const slug = pathname.replace('/destinations/', '').replace(/-/g, ' ');
       const titleSlug = slug.replace(/\b\w/g, (c) => c.toUpperCase());
-      document.title = `${titleSlug} Flights & Packages | The King Travel`;
-      return;
+      resolvedTitle = `${titleSlug} Flights & Packages | ${brandName}`;
+    } else if (ROUTE_LABELS[pathname]) {
+      resolvedTitle = `${ROUTE_LABELS[pathname]} | ${brandName}`;
     }
-    document.title = ROUTE_TITLES[pathname] || 'The King Travel – Your Ultimate Travel Partner!';
-  }, [pathname]);
+
+    document.title = resolvedTitle;
+    updateMetaContent('meta[property="og:title"]', resolvedTitle);
+    updateMetaContent('meta[name="twitter:title"]', resolvedTitle);
+
+    const seoDesc = settings.seoDescription?.trim();
+    if (seoDesc) {
+      updateMetaContent('meta[name="description"]', seoDesc);
+      updateMetaContent('meta[property="og:description"]', seoDesc);
+      updateMetaContent('meta[name="twitter:description"]', seoDesc);
+    }
+  }, [pathname, settings.agencyName, settings.tagline, settings.seoTitle, settings.seoDescription]);
+
   return null;
 }
 

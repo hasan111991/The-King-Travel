@@ -11,7 +11,7 @@
         "phone": { "type": "string", "maxLength": 40 },
         "whatsapp": { "type": "string", "maxLength": 40 },
         "nationality": { "type": "string", "maxLength": 80 },
-        "role": { "type": "string", "enum": ["customer", "admin", "super_admin"] },
+        "role": { "type": "string", "enum": ["customer", "booking_agent", "admin", "super_admin"] },
         "status": { "type": "string", "enum": ["active", "blocked"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
@@ -45,7 +45,7 @@
         "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
         "email": { "type": "string", "format": "email", "maxLength": 200 },
         "name": { "type": "string", "minLength": 1, "maxLength": 120 },
-        "role": { "type": "string", "enum": ["admin", "super_admin"] },
+        "role": { "type": "string", "enum": ["booking_agent", "admin", "super_admin"] },
         "assignedBy": { "type": "string", "maxLength": 128 },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -208,7 +208,7 @@
         "airportCode": { "type": "string", "maxLength": 10 },
         "region": { "type": "string", "enum": ["international", "domestic", "usa_featured"] },
         "description": { "type": "string", "maxLength": 500 },
-        "imageUrl": { "type": "string", "maxLength": 500 },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
         "startingFare": { "type": "number" },
         "currency": { "type": "string", "maxLength": 10 },
         "featured": { "type": "boolean" },
@@ -231,7 +231,7 @@
         "currency": { "type": "string", "maxLength": 10 },
         "description": { "type": "string", "maxLength": 800 },
         "includedServices": { "type": "array" },
-        "imageUrl": { "type": "string", "maxLength": 500 },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
         "featured": { "type": "boolean" },
         "status": { "type": "string", "enum": ["active", "inactive"] },
         "updatedAt": { "type": "string", "format": "date-time" }
@@ -317,20 +317,72 @@
     },
     "WebsiteSettings": {
       "title": "WebsiteSettings",
-      "description": "Configurable agency contact, payment instructions, legal text, and mode settings.",
+      "description": "Configurable agency branding, homepage hero/banner, SEO metadata, contact info, social links, payment instructions, legal text, and mode settings.",
       "type": "object",
       "properties": {
-        "agencyName": { "type": "string", "maxLength": 120 },
-        "tagline": { "type": "string", "maxLength": 160 },
+        "agencyName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "tagline": { "type": "string", "maxLength": 300 },
+        "logoUrl": { "type": "string", "maxLength": 1000 },
+        "heroBannerUrl": { "type": "string", "maxLength": 1000 },
+        "seoTitle": { "type": "string", "maxLength": 160 },
+        "seoDescription": { "type": "string", "maxLength": 400 },
+        "executiveName": { "type": "string", "maxLength": 120 },
+        "executiveRole": { "type": "string", "maxLength": 120 },
         "operatingMode": { "type": "string", "enum": ["demo", "live"] },
         "defaultCurrency": { "type": "string", "maxLength": 10 },
         "whatsappNumber": { "type": "string", "maxLength": 40 },
         "contactEmail": { "type": "string", "maxLength": 200 },
         "contactPhone": { "type": "string", "maxLength": 40 },
+        "secondaryPhone": { "type": "string", "maxLength": 40 },
         "officeAddress": { "type": "string", "maxLength": 300 },
+        "heroTitle": { "type": "string", "maxLength": 200 },
+        "heroSubtitle": { "type": "string", "maxLength": 600 },
+        "footerText": { "type": "string", "maxLength": 600 },
+        "socialLinks": { "type": "object" },
+        "paymentMethods": { "type": "object" },
+        "bankDetails": { "type": "object" },
+        "faqs": { "type": "array" },
+        "legalPages": { "type": "object" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["agencyName", "operatingMode", "defaultCurrency", "updatedAt"]
+    },
+    "Hotel": {
+      "title": "Hotel",
+      "description": "Curated hotel property managed by agency administrators.",
+      "type": "object",
+      "properties": {
+        "hotelId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "city": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "country": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "category": { "type": "string", "enum": ["luxury_resort", "city_business", "haram_proximity", "budget"] },
+        "pricePerNight": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "starRating": { "type": "number" },
+        "description": { "type": "string", "maxLength": 800 },
+        "amenities": { "type": "array" },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "featured": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["hotelId", "name", "city", "country", "category", "starRating", "description", "status", "updatedAt"]
+    },
+    "Faq": {
+      "title": "Faq",
+      "description": "Frequently asked question displayed on the homepage and dedicated FAQs page.",
+      "type": "object",
+      "properties": {
+        "faqId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "question": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "answer": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "category": { "type": "string", "maxLength": 80 },
+        "order": { "type": "number" },
+        "status": { "type": "string", "enum": ["published", "hidden"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["faqId", "question", "answer", "order", "status", "updatedAt"]
     },
     "AuditLog": {
       "title": "AuditLog",
@@ -390,6 +442,14 @@
       "schema": { "$ref": "#/entities/SpecialOffer" },
       "description": "Promotional seasonal offers managed by admins."
     },
+    "/hotels/{hotelId}": {
+      "schema": { "$ref": "#/entities/Hotel" },
+      "description": "Curated hotel accommodations managed by admins."
+    },
+    "/faqs/{faqId}": {
+      "schema": { "$ref": "#/entities/Faq" },
+      "description": "Frequently asked questions managed by admins."
+    },
     "/testimonials/{testimonialId}": {
       "schema": { "$ref": "#/entities/Testimonial" },
       "description": "Customer reviews managed by admins."
@@ -405,6 +465,10 @@
     "/notifications/{notificationId}": {
       "schema": { "$ref": "#/entities/Notification" },
       "description": "User-scoped booking and payment notifications."
+    },
+    "/siteSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/WebsiteSettings" },
+      "description": "Canonical public agency CMS configuration (document: general)."
     },
     "/websiteSettings/{settingId}": {
       "schema": { "$ref": "#/entities/WebsiteSettings" },

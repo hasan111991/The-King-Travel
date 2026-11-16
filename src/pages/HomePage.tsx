@@ -86,8 +86,8 @@ export function HomePage() {
       {/* Hero Section */}
       <section className="relative bg-[#0F2942] overflow-hidden">
         <img
-          src={ASSETS.heroAirline}
-          alt="Commercial aircraft flying above golden sunset clouds"
+          src={settings.heroBannerUrl?.trim() || ASSETS.heroAirline}
+          alt={`${settings.agencyName || 'The King Travel'} Hero Banner`}
           referrerPolicy="no-referrer"
           className="absolute inset-0 w-full h-full object-cover opacity-50"
         />
@@ -99,7 +99,7 @@ export function HomePage() {
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-16 lg:pt-20 lg:pb-24">
           <div className="max-w-3xl mb-10">
             <p className="text-xs sm:text-sm font-semibold tracking-wider text-[#FD8F1C] mb-3">
-              The King Travel · {settings.tagline || 'Your Ultimate Travel Partner!'}
+              {settings.agencyName || 'The King Travel'} · {settings.tagline || 'Your Ultimate Travel Partner!'}
             </p>
             <h1 className="font-display text-4xl sm:text-5xl lg:text-[56px] font-bold text-white leading-[1.12] tracking-tight">
               {settings.heroTitle || 'Discover the World with The King Travel'}

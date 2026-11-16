@@ -1,4 +1,4 @@
-export type UserRole = 'customer' | 'admin' | 'super_admin';
+export type UserRole = 'customer' | 'booking_agent' | 'admin' | 'super_admin';
 export type AccountStatus = 'active' | 'blocked';
 
 export interface UserProfile {
@@ -32,7 +32,7 @@ export interface AdminRoleRecord {
   uid: string;
   email: string;
   name: string;
-  role: 'admin' | 'super_admin';
+  role: 'booking_agent' | 'admin' | 'super_admin';
   assignedBy: string;
   createdAt: any;
 }
@@ -63,9 +63,9 @@ export interface FareBreakdown {
 
 export interface FlightOfferResult {
   id: string;
-  provider: 'amadeus' | 'duffel' | 'demo' | 'manual_offer';
+  provider: 'amadeus' | 'duffel' | 'manual_offer';
   isDemo: boolean;
-  pricingType: 'demo_sample' | 'manual_quotation' | 'confirmed_supplier';
+  pricingType: 'manual_quotation' | 'confirmed_supplier';
   airline: string;
   airlineCode: string;
   flightNumber: string;
@@ -130,7 +130,7 @@ export interface BookingRecord {
   bookingId: string;
   bookingReference: string;
   userId: string;
-  mode: 'demo' | 'live';
+  mode: 'live';
   flightDetails: Record<string, any>;
   passengers: PassengerInput[];
   contactDetails: BookingContactDetails;
@@ -272,17 +272,48 @@ export interface NotificationItem {
   createdAt: any;
 }
 
+export interface HotelItem {
+  hotelId: string;
+  name: string;
+  city: string;
+  country: string;
+  category: 'luxury_resort' | 'city_business' | 'haram_proximity' | 'budget';
+  pricePerNight?: number;
+  currency?: string;
+  starRating: number;
+  description: string;
+  amenities: string[];
+  imageUrl?: string;
+  featured: boolean;
+  status: 'active' | 'inactive';
+  updatedAt?: any;
+}
+
 export interface FaqItem {
   question: string;
   answer: string;
 }
 
+export interface FaqRecord {
+  faqId: string;
+  question: string;
+  answer: string;
+  category?: string;
+  order: number;
+  status: 'published' | 'hidden';
+  updatedAt?: any;
+}
+
 export interface AgencySettings {
   agencyName: string;
   tagline: string;
+  logoUrl?: string;
+  heroBannerUrl?: string;
+  seoTitle?: string;
+  seoDescription?: string;
   executiveName?: string;
   executiveRole?: string;
-  operatingMode: 'demo' | 'live';
+  operatingMode: 'live';
   defaultCurrency: string;
   whatsappNumber: string;
   contactEmail: string;
@@ -291,6 +322,7 @@ export interface AgencySettings {
   officeAddress: string;
   heroTitle: string;
   heroSubtitle: string;
+  footerText?: string;
   socialLinks: {
     facebook?: string;
     instagram?: string;

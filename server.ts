@@ -121,7 +121,7 @@ async function startServer() {
         infants: Math.max(0, Math.min(4, Number(body.infants || 0))),
         cabinClass: body.cabinClass || 'Economy',
         currency: body.currency || 'USD',
-        mode: body.mode === 'live' ? 'live' : 'demo',
+        mode: 'live',
       };
 
       const result = await searchSupplierFlights(params);
@@ -281,9 +281,13 @@ async function startServer() {
       '/flight-request',
       '/hotels',
       '/hajj-umrah',
+      '/umrah-packages',
       '/packages',
+      '/domestic-tours',
+      '/international-tours',
       '/destinations',
       '/services',
+      '/faqs',
       '/about',
       '/contact',
       '/terms',
